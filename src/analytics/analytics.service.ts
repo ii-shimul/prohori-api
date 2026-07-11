@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types';
+import { AlertsService } from '../alerts/alerts.service';
 import { PrismaService } from '../database/prisma.service';
 import {
   DataQuality,
@@ -28,7 +29,10 @@ type ScopedTransaction = Prisma.TransactionClient;
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly alerts?: AlertsService,
+  ) {}
 
   async getBalances(user: AuthenticatedUser, outletId: string) {
     return this.withScope(user, async (tx) => {
@@ -238,6 +242,32 @@ export class AnalyticsService {
         outletId,
         transactions,
       });
+      if (this.alerts) {
+        const signals = await tx.anomalySignal.findMany({
+          where: { outletId, evidenceWindowEnd: generatedAt },
+          select: {
+            id: true,
+            providerId: true,
+            score: true,
+            correlation: { select: { id: true } },
+          },
+        });
+        await this.alerts.syncForecastAlerts(tx, {
+          anomalySignals: signals.map((signal) => ({
+            id: signal.id,
+            providerId: signal.providerId,
+            score: Number(signal.score),
+          })),
+          dataQuality,
+          forecastRunId: run.id,
+          generatedAt,
+          hasCorrelation: signals.some((signal) => Boolean(signal.correlation)),
+          incidentCount: incidents.length,
+          modelConfidence: forecast.modelConfidence,
+          outletId,
+          resources: forecast.resources,
+        });
+      }
       return { ...response, id: run.id };
     });
   }

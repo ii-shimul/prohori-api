@@ -333,6 +333,87 @@ model DataQualityIncident {
   @@schema("app")
 }
 
+
+
+model Alert {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outletId String @map("outlet_id") @db.Uuid
+  providerId String? @map("provider_id") @db.Uuid
+  resource String?
+  type String
+  severity String
+  status String @default("open")
+  fingerprint String @unique
+  episodeStartedAt DateTime @map("episode_started_at") @db.Timestamptz(6)
+  lastObservedAt DateTime @map("last_observed_at") @db.Timestamptz(6)
+  occurrenceCount Int @default(1) @map("occurrence_count")
+  messageKey String @map("message_key")
+  messageParams Json @default("{}") @map("message_params")
+  evidence Json @default("{}")
+  dataQuality String @map("data_quality")
+  modelConfidence Decimal @map("model_confidence") @db.Decimal(5, 4)
+  ownerUserId String? @map("owner_user_id") @db.Uuid
+  acknowledgedAt DateTime? @map("acknowledged_at") @db.Timestamptz(6)
+  acknowledgedBy String? @map("acknowledged_by") @db.Uuid
+  active Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([outletId, providerId, active, lastObservedAt(sort: Desc)])
+  @@map("alerts")
+  @@schema("app")
+}
+
+model AlertEvidenceSnapshot {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alertId String @map("alert_id") @db.Uuid
+  observedAt DateTime @map("observed_at") @db.Timestamptz(6)
+  kind String
+  snapshot Json
+
+  @@index([alertId, observedAt(sort: Desc)])
+  @@map("alert_evidence_snapshots")
+  @@schema("app")
+}
+
+model AlertRoute {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alertId String @map("alert_id") @db.Uuid
+  recipientUserId String @map("recipient_user_id") @db.Uuid
+  routeKind String @map("route_kind")
+  redacted Boolean @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([alertId, recipientUserId])
+  @@index([recipientUserId, alertId])
+  @@map("alert_routes")
+  @@schema("app")
+}
+
+model AlertCaseRequest {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alertId String @unique @map("alert_id") @db.Uuid
+  requestedBy String @map("requested_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("alert_case_requests")
+  @@schema("app")
+}
+
+model AlertActionIdempotency {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alertId String @map("alert_id") @db.Uuid
+  actorUserId String @map("actor_user_id") @db.Uuid
+  action String
+  idempotencyKey String @map("idempotency_key")
+  response Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([actorUserId, action, idempotencyKey])
+  @@map("alert_action_idempotency")
+  @@schema("app")
+}
+
 model Transaction {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId      String               @map("provider_id") @db.Uuid

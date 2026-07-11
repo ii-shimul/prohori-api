@@ -336,6 +336,99 @@ paths:
           description: Next scenario batch applied
         '403':
           $ref: '#/components/responses/StandardError'
+  /alerts:
+    get:
+      operationId: listAlerts
+      summary: List review-only alerts in the verified caller's route scope
+      description: Provider alerts are visible only to routed provider members/assignments. Shared-cash alerts contain no competitor provider detail.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: active
+          in: query
+          schema: { type: boolean }
+        - name: outletId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/AlertType' }
+      responses:
+        '200':
+          description: Scoped alert episodes
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Alert' } }
+              example:
+                - id: 90000000-0000-4000-8000-000000000001
+                  outletId: 30000000-0000-4000-8000-000000000001
+                  providerId: 10000000-0000-4000-8000-000000000001
+                  resource: provider_efloat
+                  type: provider_emoney_pressure
+                  severity: high
+                  status: open
+                  active: true
+                  episodeStartedAt: '2026-01-01T12:00:00.000Z'
+                  lastObservedAt: '2026-01-01T12:00:00.000Z'
+                  occurrenceCount: 1
+                  message: { key: alerts.provider_emoney_pressure.review, params: { severity: high } }
+                  evidence: { forecastRunId: 70000000-0000-4000-8000-000000000001 }
+                  dataQuality: healthy
+                  modelConfidence: 0.8
+                  ownerUserId: null
+                  acknowledgedAt: null
+                  acknowledgedBy: null
+        '401': { $ref: '#/components/responses/StandardError' }
+  /alerts/{id}:
+    get:
+      operationId: getAlert
+      summary: Get scoped alert evidence and localized message key
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AlertId' }]
+      responses:
+        '200': { description: Scoped alert detail, content: { application/json: { schema: { $ref: '#/components/schemas/AlertDetail' } } } }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /alerts/{id}/acknowledge:
+    post:
+      operationId: acknowledgeAlert
+      summary: Acknowledge a scoped review alert
+      description: Review workflow only; this never changes a balance, ledger, provider feed, or financial state.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AlertId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201': { description: Acknowledged alert, content: { application/json: { schema: { $ref: '#/components/schemas/Alert' } } } }
+        '400': { $ref: '#/components/responses/StandardError' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /alerts/{id}/assign:
+    post:
+      operationId: assignAlert
+      summary: Assign a scoped alert to a routed recipient
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AlertId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertAssignment' }
+            example: { assigneeUserId: 40000000-0000-4000-8000-000000000002 }
+      responses:
+        '201': { description: Assigned alert, content: { application/json: { schema: { $ref: '#/components/schemas/Alert' } } } }
+        '400': { $ref: '#/components/responses/StandardError' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /alerts/{id}/create-case:
+    post:
+      operationId: createAlertCaseRequest
+      summary: Create an idempotent human-review case request from a scoped alert
+      description: Creates only a review coordination record in this release. The complete case lifecycle and audit timeline are added in Step 9.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/AlertId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201': { description: Case request created, content: { application/json: { schema: { $ref: '#/components/schemas/AlertCaseRequestResponse' } } } }
+        '400': { $ref: '#/components/responses/StandardError' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
 components:
   securitySchemes:
     providerIngestKey:
@@ -347,6 +440,17 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    AlertId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 200 }
+      description: Required replay-safe workflow mutation key.
     OutletId:
       name: id
       in: path
@@ -630,6 +734,67 @@ components:
               lifecycle: { type: string, enum: [PENDING, SETTLED, FAILED, REVERSED] }
               occurredAt: { type: string, format: date-time }
         nextCursor: { type: [string, 'null'], format: uuid }
+    AlertType:
+      type: string
+      enum: [provider_emoney_pressure, shared_cash_pressure, unusual_activity_review, data_quality_issue, combined_review]
+    Alert:
+      type: object
+      required: [id, outletId, providerId, resource, type, severity, status, active, episodeStartedAt, lastObservedAt, occurrenceCount, message, evidence, dataQuality, modelConfidence, ownerUserId, acknowledgedAt, acknowledgedBy]
+      properties:
+        id: { type: string, format: uuid }
+        outletId: { type: string, format: uuid }
+        providerId: { type: [string, 'null'], format: uuid, description: Null for redacted shared-cash and outlet-wide review alerts. }
+        resource: { type: [string, 'null'], enum: [shared_cash, provider_efloat, null] }
+        type: { $ref: '#/components/schemas/AlertType' }
+        severity: { type: string, enum: [low, moderate, high, critical] }
+        status: { type: string, enum: [open, acknowledged, assigned, case_created, resolved] }
+        active: { type: boolean }
+        episodeStartedAt: { type: string, format: date-time }
+        lastObservedAt: { type: string, format: date-time }
+        occurrenceCount: { type: integer, minimum: 1 }
+        message:
+          type: object
+          required: [key, params]
+          properties:
+            key: { type: string, enum: [alerts.provider_emoney_pressure.review, alerts.shared_cash_pressure.review, alerts.unusual_activity_review.review, alerts.data_quality_issue.review, alerts.combined_review.review] }
+            params: { type: object, additionalProperties: true, description: Localize using English/Bengali client message catalogs; never infer a financial action. }
+        evidence: { type: object, additionalProperties: true }
+        dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
+        modelConfidence: { type: number, minimum: 0, maximum: 1 }
+        ownerUserId: { type: [string, 'null'], format: uuid }
+        acknowledgedAt: { type: [string, 'null'], format: date-time }
+        acknowledgedBy: { type: [string, 'null'], format: uuid }
+    AlertDetail:
+      allOf:
+        - $ref: '#/components/schemas/Alert'
+        - type: object
+          required: [evidenceSnapshots]
+          properties:
+            evidenceSnapshots:
+              type: array
+              items:
+                type: object
+                required: [kind, observedAt, snapshot]
+                properties:
+                  kind: { type: string, enum: [forecast, anomaly_signal, data_quality_incident, correlation] }
+                  observedAt: { type: string, format: date-time }
+                  snapshot: { type: object, additionalProperties: true }
+    AlertAssignment:
+      type: object
+      required: [assigneeUserId]
+      properties:
+        assigneeUserId: { type: string, format: uuid, description: Must be a recipient derived from alert routing. }
+    AlertCaseRequestResponse:
+      type: object
+      required: [alert, caseRequest]
+      properties:
+        alert: { $ref: '#/components/schemas/Alert' }
+        caseRequest:
+          type: object
+          required: [id, createdAt]
+          properties:
+            id: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
     StandardError:
       type: object
       required: [code, message, fieldErrors, correlationId]

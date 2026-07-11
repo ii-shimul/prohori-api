@@ -78,7 +78,7 @@ export function detectUnusualActivity(input: {
           'A scheduled campaign or common denomination may produce repeated amounts; review the event context.',
         score: boundedScore(cluster.transactions.length / threshold),
         sourceTransactionIds: cluster.transactions
-          .sort(
+          .toSorted(
             (left, right) =>
               left.occurredAt.getTime() - right.occurredAt.getTime(),
           )

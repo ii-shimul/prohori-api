@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, deterministic simulation state/baselines, persisted forecast runs/point snapshots, anomaly signals, and liquidity/anomaly correlations. Steps 1–7 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, deterministic simulation state/baselines, persisted forecast runs/point snapshots, anomaly signals/correlations, and provider-aware alert episodes, routing, evidence snapshots, action idempotency records, and case-request coordination records. Steps 1–8 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
@@ -93,6 +93,9 @@ Current routes:
 - `GET /outlets/{id}/transactions?limit=50&cursor={uuid}` — scoped provider ledger events.
 - `GET /outlets/{id}/anomalies` — persisted repeated-amount and velocity review signals with source references, baseline, threshold, score, quality/confidence, benign-context explanation, and any non-causal liquidity correlation.
 - `GET /outlets/{id}/data-quality` — scoped active quality incidents behind analytics outputs.
+- `GET /alerts?active=true&outletId={uuid}&type={alert-type}` — routed review-only alert episodes.
+- `GET /alerts/{id}` — scoped alert plus immutable evidence snapshots.
+- `POST /alerts/{id}/acknowledge`, `POST /alerts/{id}/assign`, `POST /alerts/{id}/create-case` — require `Idempotency-Key`; workflow-only and never mutate balances or transactions.
 - `POST /simulation/reset`, `POST /simulation/start`, `POST /simulation/step` (DEMO_ADMIN only)
 
 Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step 3 adds verified Supabase JWT authentication and scope enforcement. They are never temporarily public.
@@ -119,6 +122,12 @@ For a normal feed, points include ETAs. After scenario C creates delayed/conflic
 `GET /outlets/{id}/anomalies` creates deterministic, persisted signals from settled outlet/provider transactions in a 60-minute evidence window and a preceding seeded-history baseline. Repeated/near-identical amount clusters trigger at three events above baseline; velocity triggers at four events or three times the six-bucket baseline. Each signal includes the detector version, observed and baseline values, threshold, normalized score, source transaction IDs, evidence window, possible benign explanation, analytical confidence, and propagated data quality.
 
 Scenario B submits four same-amount `CASH_OUT` events through the normal ingestion path. This produces separate shared-cash liquidity pressure and unusual-activity signals. A correlation is persisted only when both meet the fixed `0.75` threshold; its context explicitly states that coincidence in the evidence window does not establish causation. All responses say **“Unusual activity requires review.”** They never label activity as fraud or make a verdict.
+
+## Alerts and safe localization
+
+Forecasts, unusual-activity signals, quality incidents, and correlations create/update stable alert episodes. The fingerprint is `type + outlet + provider/resource + hourly evidence window`; repeated observations update the active episode instead of producing duplicate alerts. Provider e-money and unusual-activity alerts are routed only to active memberships with an active assignment at the outlet. Shared-cash alerts route at outlet level and expose `providerId: null` plus redacted evidence, so a recipient cannot see competitor provider projections.
+
+Alert text is delivered as stable message keys and parameters, not a hard-coded imperative. Clients should localize the keys in English/Bengali (for example, `alerts.shared_cash_pressure.review` and `alerts.unusual_activity_review.review`) and retain review-only wording. The API does not prescribe refills, transfers, freezes, blocks, or fraud outcomes. `create-case` currently creates an idempotent review coordination record; Step 9 expands it into the complete case/audit lifecycle.
 
 ## Environment
 

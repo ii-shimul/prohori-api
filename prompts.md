@@ -61,3 +61,12 @@ keep it review only, never call anything fraud
 correlate it with liquidity pressure only when both rules match, dont say correlation means cause
 add Scenario B tests and scoped anomaly/data-quality APIs
 test normal and bad cases before finish
+
+Commit 8:
+
+turn forecast and anomaly signals into provider-aware alerts
+route alert only to right provider/outlet people, never leak another provider data
+add alert evidence, safe next step, localization key, owner/recipient and stable deduplication
+build alert list/detail, acknowledge, assign and create-case APIs with idempotency
+no transfer/refill/funds action wording or behavior
+test routing, redaction, duplicate alert and unauthorized requests before finish

@@ -75,6 +75,17 @@ describe('Health endpoint (e2e)', () => {
     });
   });
 
+  it.each([
+    '/api/v1/alerts',
+    '/api/v1/alerts/90000000-0000-4000-8000-000000000001',
+  ])('rejects unauthenticated alert route %s', async (url) => {
+    const response = await app.inject({ method: 'GET', url });
+    expect(response.statusCode).toBe(401);
+    expect(JSON.parse(response.body)).toMatchObject({
+      code: 'MISSING_ACCESS_TOKEN',
+    });
+  });
+
   it.each(['/api/v1/providers', '/api/v1/areas', '/api/v1/outlets'])(
     'keeps catalog route %s unavailable until scoped reads are configured',
     async (url) => {
