@@ -22,7 +22,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "openapi:lint": "redocly lint openapi.yaml",
     "prisma:generate": "prisma generate",
-    "db:reset": "supabase db reset --local",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase start && supabase db reset --local",
     "scenario:reset": "node scripts/scenario-reset.mjs"
   },
   "dependencies": {

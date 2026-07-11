@@ -53,6 +53,8 @@ model Provider {
   createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   memberships ProviderMembership[]
   assignments OutletAssignment[]
+  providerBalances ProviderBalance[]
+  transactions Transaction[]
 
   @@map("providers")
   @@schema("app")
@@ -85,6 +87,10 @@ model Outlet {
   status      OutletStatus       @default(ACTIVE)
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   assignments OutletAssignment[]
+  cashBalance OutletCashBalance?
+  providerBalances ProviderBalance[]
+  transactions Transaction[]
+  forecastRuns ForecastRun[]
 
   @@map("outlets")
   @@schema("app")
@@ -162,6 +168,7 @@ enum TransactionLifecycle {
 
 model OutletCashBalance {
   outletId    String   @id @map("outlet_id") @db.Uuid
+  outlet      Outlet   @relation(fields: [outletId], references: [id], onDelete: Cascade)
   amountMinor BigInt   @map("amount_minor")
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -171,12 +178,50 @@ model OutletCashBalance {
 
 model ProviderBalance {
   outletId    String   @map("outlet_id") @db.Uuid
+  outlet      Outlet   @relation(fields: [outletId], references: [id], onDelete: Cascade)
   providerId  String   @map("provider_id") @db.Uuid
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Restrict)
   amountMinor BigInt   @map("amount_minor")
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@id([outletId, providerId])
   @@map("provider_balances")
+  @@schema("app")
+}
+
+model ForecastRun {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outletId        String          @map("outlet_id") @db.Uuid
+  outlet          Outlet          @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  generatedAt     DateTime        @default(now()) @map("generated_at") @db.Timestamptz(6)
+  dataQuality     String          @map("data_quality")
+  modelConfidence Decimal         @map("model_confidence") @db.Decimal(5, 4)
+  limitingResource String?        @map("limiting_resource")
+  evidence        Json
+  output          Json
+  points          ForecastPoint[]
+
+  @@index([outletId, generatedAt(sort: Desc)])
+  @@map("forecast_runs")
+  @@schema("app")
+}
+
+model ForecastPoint {
+  id                         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  forecastRunId              String      @map("forecast_run_id") @db.Uuid
+  forecastRun                ForecastRun @relation(fields: [forecastRunId], references: [id], onDelete: Cascade)
+  providerId                 String?     @map("provider_id") @db.Uuid
+  resource                   String
+  horizonMinutes             Int         @map("horizon_minutes")
+  projectedLowMinor          BigInt      @map("projected_low_minor")
+  projectedHighMinor         BigInt      @map("projected_high_minor")
+  projectedMidMinor          BigInt      @map("projected_mid_minor")
+  riskBand                   String      @map("risk_band")
+  reserveEtaMinutes          Int?        @map("reserve_eta_minutes")
+  likelyDepletionEtaMinutes  Int?        @map("likely_depletion_eta_minutes")
+
+  @@index([forecastRunId, resource, providerId])
+  @@map("forecast_points")
   @@schema("app")
 }
 
@@ -245,7 +290,9 @@ model DataQualityIncident {
 model Transaction {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId      String               @map("provider_id") @db.Uuid
+  provider        Provider             @relation(fields: [providerId], references: [id], onDelete: Restrict)
   outletId        String               @map("outlet_id") @db.Uuid
+  outlet          Outlet               @relation(fields: [outletId], references: [id], onDelete: Restrict)
   feedBatchId     String?              @map("feed_batch_id") @db.Uuid
   providerEventId String               @map("provider_event_id")
   eventVersion    Int                  @default(1) @map("event_version")

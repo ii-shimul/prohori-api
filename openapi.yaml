@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Prohori API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Synthetic decision-support API for provider liquidity, unusual activity review,
     data quality, and case coordination. It never performs financial actions.
@@ -154,6 +154,92 @@ paths:
           $ref: '#/components/responses/StandardError'
         '503':
           $ref: '#/components/responses/StandardError'
+  /outlets/{id}/health:
+    get:
+      operationId: getOutletHealth
+      summary: Get scoped outlet liquidity-health summary
+      description: Produces and persists a deterministic forecast run. `modelConfidence` measures analytical history coverage independently from feed `dataQuality`.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OutletId' }]
+      responses:
+        '200':
+          description: Scoped outlet health
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutletHealth' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /outlets/{id}/balances:
+    get:
+      operationId: getOutletBalances
+      summary: Get scoped, separate shared-cash and provider e-money positions
+      description: Shared cash and provider e-money are separate resources and are never exposed as a combined actionable balance.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OutletId' }]
+      responses:
+        '200':
+          description: Authorized resource positions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutletBalances' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /outlets/{id}/forecasts:
+    get:
+      operationId: getOutletForecasts
+      summary: Generate and persist a deterministic scoped liquidity forecast
+      description: Forecasts 30, 60, 120, and 240-minute bounds for shared cash and each authorized provider e-money resource. With `unreliable` quality, exact ETAs are null; the analytical confidence remains available.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OutletId' }]
+      responses:
+        '200':
+          description: Persisted forecast run
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ForecastRun' }
+              examples:
+                normal:
+                  value:
+                    id: 70000000-0000-4000-8000-000000000001
+                    outletId: 30000000-0000-4000-8000-000000000001
+                    generatedAt: '2026-01-01T12:00:00.000Z'
+                    dataQuality: healthy
+                    modelConfidence: 0.625
+                    limitingResource: { resource: provider_efloat, providerId: 10000000-0000-4000-8000-000000000001 }
+                    resources: [{ resource: provider_efloat, providerId: 10000000-0000-4000-8000-000000000001, currentMinor: '300000', demandRateMinorPerMinute: 833.33, points: [{ horizonMinutes: 30, projectedLowMinor: '270000', projectedMidMinor: '275000', projectedHighMinor: '280000', reserveEtaMinutes: 240, likelyDepletionEtaMinutes: 360, riskBand: moderate }] }]
+                unreliableData:
+                  value:
+                    id: 70000000-0000-4000-8000-000000000002
+                    outletId: 30000000-0000-4000-8000-000000000001
+                    generatedAt: '2026-01-01T12:00:00.000Z'
+                    dataQuality: unreliable
+                    modelConfidence: 0.625
+                    limitingResource: { resource: provider_efloat, providerId: 10000000-0000-4000-8000-000000000001 }
+                    resources: [{ resource: provider_efloat, providerId: 10000000-0000-4000-8000-000000000001, currentMinor: '300000', demandRateMinorPerMinute: 833.33, points: [{ horizonMinutes: 30, projectedLowMinor: '270000', projectedMidMinor: '275000', projectedHighMinor: '280000', reserveEtaMinutes: null, likelyDepletionEtaMinutes: null, riskBand: moderate }] }]
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /outlets/{id}/transactions:
+    get:
+      operationId: listOutletTransactions
+      summary: List provider-scoped outlet ledger events
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OutletId'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Authorized transaction page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionPage' }
+        '400': { $ref: '#/components/responses/StandardError' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
   /simulation/reset:
     post:
       operationId: resetSimulation
@@ -214,6 +300,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    OutletId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     ProviderIngestKey:
       name: X-Provider-Ingest-Key
       in: header
@@ -359,6 +450,90 @@ components:
           type: array
           items:
             type: object
+    OutletHealth:
+      type: object
+      required: [outletId, forecastRunId, dataQuality, modelConfidence, limitingResource]
+      properties:
+        outletId: { type: string, format: uuid }
+        forecastRunId: { type: string, format: uuid }
+        dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
+        modelConfidence: { type: number, minimum: 0, maximum: 1 }
+        limitingResource: { $ref: '#/components/schemas/LimitingResource' }
+    OutletBalances:
+      type: object
+      required: [outletId, sharedCash, providerEMoney]
+      properties:
+        outletId: { type: string, format: uuid }
+        sharedCash: { $ref: '#/components/schemas/ResourceBalance' }
+        providerEMoney:
+          type: array
+          items: { $ref: '#/components/schemas/ProviderResourceBalance' }
+    ResourceBalance:
+      type: object
+      required: [resource, amountMinor]
+      properties:
+        resource: { type: string, enum: [shared_cash, provider_efloat] }
+        amountMinor: { type: string, description: Integer BDT minor units serialized as a string }
+    ProviderResourceBalance:
+      allOf:
+        - $ref: '#/components/schemas/ResourceBalance'
+        - type: object
+          required: [provider]
+          properties:
+            provider: { $ref: '#/components/schemas/Provider' }
+    LimitingResource:
+      type: [object, 'null']
+      properties:
+        resource: { type: string, enum: [shared_cash, provider_efloat] }
+        providerId: { type: [string, 'null'], format: uuid }
+    ForecastPoint:
+      type: object
+      required: [horizonMinutes, projectedLowMinor, projectedMidMinor, projectedHighMinor, riskBand, reserveEtaMinutes, likelyDepletionEtaMinutes]
+      properties:
+        horizonMinutes: { type: integer, enum: [30, 60, 120, 240] }
+        projectedLowMinor: { type: string }
+        projectedMidMinor: { type: string }
+        projectedHighMinor: { type: string }
+        riskBand: { type: string, enum: [low, moderate, high, critical] }
+        reserveEtaMinutes: { type: [integer, 'null'] }
+        likelyDepletionEtaMinutes: { type: [integer, 'null'] }
+    ForecastResource:
+      type: object
+      required: [resource, providerId, currentMinor, demandRateMinorPerMinute, points]
+      properties:
+        resource: { type: string, enum: [shared_cash, provider_efloat] }
+        providerId: { type: [string, 'null'], format: uuid }
+        currentMinor: { type: string }
+        demandRateMinorPerMinute: { type: number, minimum: 0 }
+        points: { type: array, items: { $ref: '#/components/schemas/ForecastPoint' } }
+    ForecastRun:
+      type: object
+      required: [id, outletId, generatedAt, dataQuality, modelConfidence, limitingResource, resources]
+      properties:
+        id: { type: string, format: uuid }
+        outletId: { type: string, format: uuid }
+        generatedAt: { type: string, format: date-time }
+        dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
+        modelConfidence: { type: number, minimum: 0, maximum: 1 }
+        limitingResource: { $ref: '#/components/schemas/LimitingResource' }
+        resources: { type: array, items: { $ref: '#/components/schemas/ForecastResource' } }
+    TransactionPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, provider, amountMinor, type, lifecycle, occurredAt]
+            properties:
+              id: { type: string, format: uuid }
+              provider: { $ref: '#/components/schemas/Provider' }
+              amountMinor: { type: string }
+              type: { type: string, enum: [CASH_IN, CASH_OUT] }
+              lifecycle: { type: string, enum: [PENDING, SETTLED, FAILED, REVERSED] }
+              occurredAt: { type: string, format: date-time }
+        nextCursor: { type: [string, 'null'], format: uuid }
     StandardError:
       type: object
       required: [code, message, fieldErrors, correlationId]

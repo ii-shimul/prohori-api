@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
@@ -12,6 +13,7 @@ import { ScopeModule } from './scope/scope.module';
   imports: [
     ConfigModule,
     DatabaseModule,
+    AnalyticsModule,
     HealthModule,
     LiquidityModule,
     IngestionModule,

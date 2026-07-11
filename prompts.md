@@ -43,3 +43,12 @@ validate batches, checksum, sequence, duplicate events and bad data
 add deterministic scenario controls for A to D, only demo admin can run them
 make sure bad feed data creates visible quality issue and never silently changes old data
 test every ingestion and simulation path before finish
+
+Commit 6:
+
+build deterministic liquidity forecast for shared cash and each provider e-money separately
+show 30 minute to 4 hour forecast, risk, confidence and reserve eta
+if data is stale or conflicting, show degraded/unreliable and hide exact eta
+add scoped outlet health, balance, forecast and transaction APIs
+make sure provider balances never become one combined usable balance
+test normal, surge, low balance, stale and conflict cases before finish

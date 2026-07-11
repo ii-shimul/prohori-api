@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, and deterministic simulation state/baselines. Steps 1–5 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, deterministic simulation state/baselines, and persisted forecast runs/point snapshots. Steps 1–6 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
@@ -87,9 +87,30 @@ Current routes:
 - `GET /areas`
 - `GET /outlets?areaCode=DHAKA_NORTH`
 - `POST /ingestion/providers/{provider}/batches`
+- `GET /outlets/{id}/health` — scoped liquidity-health summary; creates a deterministic forecast run.
+- `GET /outlets/{id}/balances` — separate shared cash and authorized provider e-money positions.
+- `GET /outlets/{id}/forecasts` — persisted 30/60/120/240-minute bounded projections.
+- `GET /outlets/{id}/transactions?limit=50&cursor={uuid}` — scoped provider ledger events.
 - `POST /simulation/reset`, `POST /simulation/start`, `POST /simulation/step` (DEMO_ADMIN only)
 
 Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step 3 adds verified Supabase JWT authentication and scope enforcement. They are never temporarily public.
+
+## Deterministic liquidity forecasts
+
+Forecast reads require a verified JWT and an active outlet assignment. Provider e-money is additionally filtered by the caller's active provider membership; shared physical cash stays a separate resource. No endpoint calculates or returns a combined balance, financial-action command, or financial-action recommendation.
+
+Each `/outlets/{id}/forecasts` request creates a `forecast_runs` record containing the input evidence snapshot and JSON output, plus four `forecast_points` per visible resource (30, 60, 120, and 240 minutes). The projection is a pure TypeScript rolling settled-flow calculation: `CASH_OUT` consumes shared cash and `CASH_IN` consumes only that provider's e-money. Bounds are derived deterministically from the observed flow variation.
+
+`modelConfidence` is an analytical history-coverage value and is intentionally distinct from feed `dataQuality`. Active freshness/sequence issues mark results `degraded`; conflicting snapshots, balance mismatches, or out-of-order feeds mark them `unreliable`. Unreliable outputs retain their confidence and bounded amounts but set `reserveEtaMinutes` and `likelyDepletionEtaMinutes` to `null`.
+
+Normal forecast request:
+
+```bash
+curl -H "Authorization: Bearer <access-token>" \
+  http://localhost:3000/api/v1/outlets/30000000-0000-4000-8000-000000000001/forecasts
+```
+
+For a normal feed, points include ETAs. After scenario C creates delayed/conflicting feed evidence, the same route returns `dataQuality: "unreliable"` and exact ETA fields are `null`; it does not make a replenishment or transfer recommendation. See [`openapi.yaml`](./openapi.yaml) for both complete response examples.
 
 ## Environment
 
