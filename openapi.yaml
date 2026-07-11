@@ -795,11 +795,38 @@ components:
         memberships:
           type: array
           items:
-            type: object
+            $ref: '#/components/schemas/ProviderMembership'
         assignments:
           type: array
           items:
-            type: object
+            $ref: '#/components/schemas/OutletAssignment'
+    UserRole:
+      type: string
+      enum: [OUTLET_AGENT, PROVIDER_OPERATIONS, PLATFORM_MANAGEMENT, DATA_STEWARD, VALIDATION_AUDITOR, DEMO_ADMIN]
+    ProviderMembership:
+      type: object
+      required: [providerId, role]
+      properties:
+        providerId:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/UserRole'
+    OutletAssignment:
+      type: object
+      required: [areaId, outletId, providerId, role]
+      properties:
+        areaId:
+          type: string
+          format: uuid
+        outletId:
+          type: string
+          format: uuid
+        providerId:
+          type: [string, 'null']
+          format: uuid
+        role:
+          $ref: '#/components/schemas/UserRole'
     OutletHealth:
       type: object
       required: [outletId, forecastRunId, dataQuality, modelConfidence, limitingResource]
