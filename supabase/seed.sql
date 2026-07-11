@@ -52,6 +52,12 @@ insert into app.provider_balances (outlet_id, provider_id, amount_minor) values
   ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', 420000),
   ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 390000);
 
+insert into app.simulation_balance_baselines (outlet_id, provider_id, resource, amount_minor) values
+  ('30000000-0000-4000-8000-000000000001', null, 'shared_cash', 850000),
+  ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'provider_efloat', 300000),
+  ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', 'provider_efloat', 420000),
+  ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 'provider_efloat', 390000);
+
 insert into app.transactions (provider_id, outlet_id, provider_event_id, type, lifecycle, amount_minor, occurred_at, idempotency_key) values
   ('10000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', 'seed-a-001', 'CASH_IN', 'SETTLED', 25000, '2026-01-01T08:00:00Z', 'seed-a-001'),
   ('10000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000001', 'seed-b-001', 'CASH_OUT', 'SETTLED', 18000, '2026-01-01T08:05:00Z', 'seed-b-001');

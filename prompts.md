@@ -35,3 +35,11 @@ after balance rules work, add prisma models and normal synthetic seed balances/t
 make sure the same seed always gives same starting data
 keep this step only about liquidity data and balance semantics, dont add simulation or analytics yet
 test everything before finish
+
+Commit 5:
+
+build provider feed ingestion properly, provider key should decide provider not request body
+validate batches, checksum, sequence, duplicate events and bad data
+add deterministic scenario controls for A to D, only demo admin can run them
+make sure bad feed data creates visible quality issue and never silently changes old data
+test every ingestion and simulation path before finish

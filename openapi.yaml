@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Prohori API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Synthetic decision-support API for provider liquidity, unusual activity review,
     data quality, and case coordination. It never performs financial actions.
@@ -112,12 +112,115 @@ paths:
           $ref: '#/components/responses/StandardError'
         '503':
           $ref: '#/components/responses/StandardError'
+  /ingestion/providers/{provider}/batches:
+    post:
+      operationId: ingestProviderBatch
+      summary: Ingest a checksum-verified synthetic provider feed batch
+      description: The `X-Provider-Ingest-Key` derives the provider scope and must match the path. Duplicate events are retained as feed-quality evidence and are never applied twice.
+      security:
+        - providerIngestKey: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ProviderCode'
+        - $ref: '#/components/parameters/ProviderIngestKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestionBatch'
+            example:
+              sequence: 1
+              sourceAt: '2026-01-01T08:00:00.000Z'
+              receivedAt: '2026-01-01T08:00:30.000Z'
+              events: []
+              snapshots: []
+              checksum: 8f3f6d7407c38bfdfb9c0f2e0cfc6a6ab7fbc8246f4e6b7424f02014d0cbb714
+      responses:
+        '201':
+          description: Receipt and data-quality result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionReceipt'
+        '400':
+          $ref: '#/components/responses/StandardError'
+        '401':
+          $ref: '#/components/responses/StandardError'
+        '409':
+          $ref: '#/components/responses/StandardError'
+        '503':
+          $ref: '#/components/responses/StandardError'
+  /simulation/reset:
+    post:
+      operationId: resetSimulation
+      summary: Reset deterministic synthetic simulation state
+      description: DEMO_ADMIN only. Restores seeded baseline balances and removes prior simulated feed receipts, events, snapshots, and quality incidents.
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Scenario state reset
+        '403':
+          $ref: '#/components/responses/StandardError'
+  /simulation/start:
+    post:
+      operationId: startSimulation
+      summary: Reset and start deterministic scenario A, B, C, or D
+      description: DEMO_ADMIN only. Fixtures are submitted through the same ingestion validation and persistence path as provider batches.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationCommand'
+            example: { scenario: A }
+      responses:
+        '201':
+          description: Scenario started
+        '403':
+          $ref: '#/components/responses/StandardError'
+  /simulation/step:
+    post:
+      operationId: stepSimulation
+      summary: Apply the next deterministic scenario batch
+      description: DEMO_ADMIN only.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulationCommand'
+      responses:
+        '201':
+          description: Next scenario batch applied
+        '403':
+          $ref: '#/components/responses/StandardError'
 components:
   securitySchemes:
+    providerIngestKey:
+      type: apiKey
+      in: header
+      name: X-Provider-Ingest-Key
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    ProviderIngestKey:
+      name: X-Provider-Ingest-Key
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Provider-scoped credential. Never send this from a browser client.
   headers:
     CorrelationId:
       description: Request correlation identifier. Client-supplied valid UUID values are echoed.
@@ -125,6 +228,57 @@ components:
         type: string
         format: uuid
   schemas:
+    ProviderCode:
+      type: string
+      enum: [PROVIDER_A, PROVIDER_B, PROVIDER_C]
+    IngestionEvent:
+      type: object
+      required: [amountMinor, eventId, eventVersion, idempotencyKey, lifecycle, occurredAt, outletCode, receivedAt, type]
+      properties:
+        amountMinor: { type: integer, minimum: 1, description: BDT integer minor units }
+        eventId: { type: string }
+        eventVersion: { type: integer, minimum: 1 }
+        idempotencyKey: { type: string }
+        lifecycle: { type: string, enum: [PENDING, SETTLED, FAILED, REVERSED] }
+        occurredAt: { type: string, format: date-time }
+        outletCode: { type: string }
+        receivedAt: { type: string, format: date-time }
+        type: { type: string, enum: [CASH_IN, CASH_OUT] }
+    BalanceSnapshot:
+      type: object
+      required: [amountMinor, observedAt, outletCode, resource]
+      properties:
+        amountMinor: { type: integer, minimum: 0 }
+        observedAt: { type: string, format: date-time }
+        outletCode: { type: string }
+        resource: { type: string, enum: [shared_cash, provider_efloat] }
+    IngestionBatch:
+      type: object
+      required: [checksum, events, receivedAt, sequence, snapshots, sourceAt]
+      properties:
+        checksum: { type: string, pattern: '^[a-fA-F0-9]{64}$' }
+        events: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/IngestionEvent' } }
+        receivedAt: { type: string, format: date-time }
+        sequence: { type: integer, minimum: 1 }
+        snapshots: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/BalanceSnapshot' } }
+        sourceAt: { type: string, format: date-time }
+      description: Checksum is SHA-256 of the recursively key-sorted JSON payload excluding `checksum`.
+    IngestionReceipt:
+      type: object
+      required: [acceptedEvents, batchId, duplicateEvents, provider, qualityStatus, rejectedEvents, sequence]
+      properties:
+        acceptedEvents: { type: integer }
+        batchId: { type: string, format: uuid }
+        duplicateEvents: { type: integer }
+        provider: { $ref: '#/components/schemas/ProviderCode' }
+        qualityStatus: { type: string, enum: [healthy, degraded] }
+        rejectedEvents: { type: integer }
+        sequence: { type: string }
+    SimulationCommand:
+      type: object
+      required: [scenario]
+      properties:
+        scenario: { type: string, enum: [A, B, C, D] }
     LiveHealthResponse:
       type: object
       required: [service, status]

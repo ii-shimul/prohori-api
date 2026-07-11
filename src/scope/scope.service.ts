@@ -6,6 +6,20 @@ import { AuthenticatedUser, CurrentUserResponse } from '../auth/auth.types';
 export class ScopeService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async isDemoAdmin(user: AuthenticatedUser): Promise<boolean> {
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.$executeRaw`set local role app_api`;
+      await transaction.$executeRaw`
+        select set_config('request.jwt.claim.sub', ${user.id}, true)
+      `;
+      const membership = await transaction.providerMembership.findFirst({
+        where: { userId: user.id, role: 'DEMO_ADMIN', isActive: true },
+        select: { id: true },
+      });
+      return Boolean(membership);
+    });
+  }
+
   async getCurrentUser(user: AuthenticatedUser): Promise<CurrentUserResponse> {
     return this.prisma.$transaction(async (transaction) => {
       await transaction.$executeRaw`set local role app_api`;

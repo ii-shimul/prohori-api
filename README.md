@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, and data-quality incidents. Steps 1–4 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, and deterministic simulation state/baselines. Steps 1–5 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
@@ -55,7 +55,21 @@ npm run test:e2e
 npm run db:reset
 ```
 
-`npm run scenario:reset` intentionally fails until Step 5 provides simulator fixtures.
+## Provider ingestion and deterministic simulation
+
+Provider feeds use `POST /api/v1/ingestion/providers/{provider}/batches` with `X-Provider-Ingest-Key`. The key determines the provider scope; it must match the `{provider}` path and is never accepted from a request body. Set a distinct `INGESTION_PROVIDER_A_KEY`, `INGESTION_PROVIDER_B_KEY`, and `INGESTION_PROVIDER_C_KEY` in your local environment. Do not expose these credentials to browser clients.
+
+A batch includes integer `amountMinor` values, source/received timestamps, sequential batch number, events, optional balance snapshots, and a SHA-256 checksum. The checksum is calculated over recursively key-sorted JSON for the body excluding `checksum`. Accepted duplicates are retained as `DUPLICATE_OR_REPLAYED_EVENT` quality evidence and never alter balances twice. Sequence gaps, out-of-order input, lag, incomplete payloads, invalid scope/timestamps, balance mismatch, and conflicting snapshots produce visible quality incidents or a safe rejection.
+
+Demo administrators (verified JWT user with `DEMO_ADMIN`) can run deterministic controls:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/simulation/reset -H "Authorization: Bearer <admin-jwt>"
+curl -X POST http://localhost:3000/api/v1/simulation/start -H "Authorization: Bearer <admin-jwt>" -H 'Content-Type: application/json' -d '{"scenario":"A"}'
+curl -X POST http://localhost:3000/api/v1/simulation/step -H "Authorization: Bearer <admin-jwt>" -H 'Content-Type: application/json' -d '{"scenario":"A"}'
+```
+
+`reset` restores seeded baseline balances and removes only simulated feed receipts, ledger events, snapshots, and quality incidents. `start` resets then submits a fixture through the same ingestion service; `step` submits the next deterministic fixture. `ADMIN_ACCESS_TOKEN=<admin-jwt> npm run scenario:reset` is the command-line equivalent (and accepts an optional `API_URL`). Scenarios A–D are synthetic only; scenario C intentionally produces freshness and snapshot-quality evidence.
 
 ## Balance semantics
 
@@ -72,6 +86,8 @@ Current routes:
 - `GET /providers`
 - `GET /areas`
 - `GET /outlets?areaCode=DHAKA_NORTH`
+- `POST /ingestion/providers/{provider}/batches`
+- `POST /simulation/reset`, `POST /simulation/start`, `POST /simulation/step` (DEMO_ADMIN only)
 
 Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step 3 adds verified Supabase JWT authentication and scope enforcement. They are never temporarily public.
 
@@ -85,3 +101,6 @@ Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step
 | `SUPABASE_URL` | none until Step 3 | Hosted Supabase project URL for Auth/JWKS; not a database URL |
 | `CORS_ORIGIN` | `http://localhost:3000` | Explicit browser origin; wildcard rejected |
 | `LOG_LEVEL` | `log` | Nest logger level |
+| `INGESTION_PROVIDER_A_KEY` | none | Provider A server-to-server ingestion credential |
+| `INGESTION_PROVIDER_B_KEY` | none | Provider B server-to-server ingestion credential |
+| `INGESTION_PROVIDER_C_KEY` | none | Provider C server-to-server ingestion credential |

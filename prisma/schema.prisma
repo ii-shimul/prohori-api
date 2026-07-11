@@ -186,6 +186,8 @@ model FeedBatch {
   sequence      BigInt
   checksum      String
   receivedAt    DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  sourceAt      DateTime? @map("source_at") @db.Timestamptz(6)
+  eventCount    Int      @default(0) @map("event_count")
   qualityStatus String   @default("healthy") @map("quality_status")
 
   @@unique([providerId, sequence])
@@ -203,6 +205,27 @@ model BalanceSnapshot {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("balance_snapshots")
+  @@schema("app")
+}
+
+model SimulationBalanceBaseline {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outletId    String   @map("outlet_id") @db.Uuid
+  providerId  String?  @map("provider_id") @db.Uuid
+  resource    String
+  amountMinor BigInt   @map("amount_minor")
+
+  @@unique([outletId, providerId, resource])
+  @@map("simulation_balance_baselines")
+  @@schema("app")
+}
+
+model SimulationState {
+  id       String @id
+  scenario String
+  step     Int
+
+  @@map("simulation_state")
   @@schema("app")
 }
 
