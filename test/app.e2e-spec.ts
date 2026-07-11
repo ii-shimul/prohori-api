@@ -50,13 +50,17 @@ describe('Health endpoint (e2e)', () => {
     expect(response.headers['x-correlation-id']).toBe(correlationId);
   });
 
-  it.each([
-    '/api/v1/me',
-    '/api/v1/providers',
-    '/api/v1/areas',
-    '/api/v1/outlets',
-  ])(
-    'keeps catalog route %s unavailable until auth is configured',
+  it('rejects /me without a bearer access token', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/v1/me' });
+
+    expect(response.statusCode).toBe(401);
+    expect(JSON.parse(response.body)).toMatchObject({
+      code: 'MISSING_ACCESS_TOKEN',
+    });
+  });
+
+  it.each(['/api/v1/providers', '/api/v1/areas', '/api/v1/outlets'])(
+    'keeps catalog route %s unavailable until scoped reads are configured',
     async (url) => {
       const response = await app.inject({ method: 'GET', url });
 

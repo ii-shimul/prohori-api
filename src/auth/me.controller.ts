@@ -1,11 +1,18 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { CatalogAuthNotConfiguredGuard } from '../providers/catalog-auth-not-configured.guard';
+import { ScopeService } from '../scope/scope.service';
+import { CurrentUser } from './current-user.decorator';
+import type { AuthenticatedUser, CurrentUserResponse } from './auth.types';
+import { SupabaseJwtGuard } from './supabase-jwt.guard';
 
 @Controller('me')
-@UseGuards(CatalogAuthNotConfiguredGuard)
+@UseGuards(SupabaseJwtGuard)
 export class MeController {
+  constructor(private readonly scopeService: ScopeService) {}
+
   @Get()
-  getCurrentUser(): never {
-    throw new Error('Authentication is configured in Step 3.');
+  getCurrentUser(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CurrentUserResponse> {
+    return this.scopeService.getCurrentUser(user);
   }
 }

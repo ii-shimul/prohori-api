@@ -14,3 +14,13 @@ Commit 2:
 
 set up supabase schema, migrations, seed data, prisma models and provider/area/outlet endpoints
 keep endpoints protected until auth step is ready
+
+
+Commit 3:
+
+set up supabase auth properly, validate jwt, add rls and make `/me` endpoint work
+make sure provider data stays isolated, provider A should never see provider B data
+keep it secure, dont trust provider id from request body
+
+update env example/readme if new auth config is needed
+test auth errors, invalid token and provider isolation before finish

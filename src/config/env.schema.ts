@@ -7,6 +7,8 @@ const environmentSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.string().url().optional(),
   SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_JWT_AUDIENCE: z.string().min(1).default('authenticated'),
+  SUPABASE_JWT_ISSUER: z.string().url().optional(),
   CORS_ORIGIN: z
     .string()
     .url()

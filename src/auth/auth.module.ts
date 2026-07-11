@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
-import { CatalogAuthNotConfiguredGuard } from '../providers/catalog-auth-not-configured.guard';
+import { ScopeModule } from '../scope/scope.module';
 import { MeController } from './me.controller';
+import { SupabaseJwtGuard } from './supabase-jwt.guard';
+import { SupabaseJwtService } from './supabase-jwt.service';
 
 @Module({
+  imports: [ScopeModule],
   controllers: [MeController],
-  providers: [CatalogAuthNotConfiguredGuard],
+  providers: [SupabaseJwtService, SupabaseJwtGuard],
+  exports: [SupabaseJwtGuard, SupabaseJwtService],
 })
 export class AuthModule {}
