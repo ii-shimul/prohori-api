@@ -180,6 +180,45 @@ model ProviderBalance {
   @@schema("app")
 }
 
+model FeedBatch {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId    String   @map("provider_id") @db.Uuid
+  sequence      BigInt
+  checksum      String
+  receivedAt    DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  qualityStatus String   @default("healthy") @map("quality_status")
+
+  @@unique([providerId, sequence])
+  @@map("feed_batches")
+  @@schema("app")
+}
+
+model BalanceSnapshot {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId  String?  @map("provider_id") @db.Uuid
+  outletId    String   @map("outlet_id") @db.Uuid
+  resource    String
+  amountMinor BigInt   @map("amount_minor")
+  observedAt  DateTime @map("observed_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("balance_snapshots")
+  @@schema("app")
+}
+
+model DataQualityIncident {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId String?   @map("provider_id") @db.Uuid
+  outletId   String?   @map("outlet_id") @db.Uuid
+  category   String
+  details    Json      @default("{}")
+  detectedAt DateTime  @default(now()) @map("detected_at") @db.Timestamptz(6)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+
+  @@map("data_quality_incidents")
+  @@schema("app")
+}
+
 model Transaction {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId      String               @map("provider_id") @db.Uuid

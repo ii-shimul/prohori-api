@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, and data-quality incidents. Steps 1–3 are complete. Step 4 balance semantics is in progress. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, and data-quality incidents. Steps 1–4 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
