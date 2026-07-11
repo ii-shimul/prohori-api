@@ -40,7 +40,9 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema also includes provider-scoped cases, alert links, append-only case events/notes, immutable audit events, and command idempotency records. Steps 1–9 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema also includes provider-scoped cases, alert links, append-only case events/notes, immutable audit events, command idempotency records, and the Step 10 fixed redacted `platform_readiness_aggregates` projection. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+
+For a clean local rehearsal, run `npm run db:reset`, then `npm run prisma:generate`. Reset only creates synthetic records; it does not create Supabase Auth users or passwords.
 
 ## Commands
 
@@ -93,6 +95,9 @@ Current routes:
 - `GET /outlets/{id}/transactions?limit=50&cursor={uuid}` — scoped provider ledger events.
 - `GET /outlets/{id}/anomalies` — persisted repeated-amount and velocity review signals with source references, baseline, threshold, score, quality/confidence, benign-context explanation, and any non-causal liquidity correlation.
 - `GET /outlets/{id}/data-quality` — scoped active quality incidents behind analytics outputs.
+- `GET /feed-health?providerId={uuid}&outletId={uuid}&limit=50&cursor={uuid}` — provider-scoped feed freshness and derived quality; filters only narrow scope.
+- `GET /data-quality/incidents?providerId={uuid}&outletId={uuid}&limit=50&cursor={uuid}` — RLS-scoped quality evidence.
+- `GET /management/readiness` — fixed redacted aggregate for `PLATFORM_MANAGEMENT` or `DEMO_ADMIN`; never exposes a provider/outlet/ledger row.
 - `GET /alerts?active=true&outletId={uuid}&type={alert-type}` — routed review-only alert episodes.
 - `GET /alerts/{id}` — scoped alert plus immutable evidence snapshots.
 - `POST /alerts/{id}/acknowledge`, `POST /alerts/{id}/assign`, `POST /alerts/{id}/create-case` — require `Idempotency-Key`; workflow-only and never mutate balances or transactions.
@@ -100,7 +105,7 @@ Current routes:
 - `POST /cases/{id}/acknowledge`, `/assign`, `/notes`, `/request-verification`, `/escalate`, `/disposition`, `/resolve`, `/close`, `/reopen` — require `Idempotency-Key` and body `version`; all are review-only commands.
 - `POST /simulation/reset`, `POST /simulation/start`, `POST /simulation/step` (DEMO_ADMIN only)
 
-Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step 3 adds verified Supabase JWT authentication and scope enforcement. They are never temporarily public.
+All catalog, analytics, feed-health, data-quality, alert, case, and management routes require a verified Supabase JWT. Server-side membership, outlet assignment, alert routing, and RLS determine visibility; provider/outlet query filters only narrow that visibility. A missing or invalid token returns the standard safe `401` error.
 
 ## Deterministic liquidity forecasts
 
@@ -137,6 +142,30 @@ Alert text is delivered as stable message keys and parameters, not a hard-coded 
 
 Every case command requires a caller-owned `Idempotency-Key` and the current optimistic `version`. A replay returns its stored response; a stale version gets `CASE_VERSION_CONFLICT`. Case events, notes, and audit events are append-only at the database level. Each mutation records actor, action, provider/outlet scope, old/new state where relevant, wall/simulated time, correlation ID, and safe metadata. Workflow modules never query or update `transactions`, `outlet_cash_balances`, or `provider_balances`.
 
+## Contract freeze — 1.0.0
+
+[`openapi.yaml`](./openapi.yaml) version **1.0.0** is the frozen client contract for web and mobile. It documents every demo route, bearer or ingestion authentication, scope/role behavior, pagination, idempotency headers, and standard errors. Do not make breaking field, route, or enum changes without an integration blocker and a new contract version.
+
+### Demo identities and roles
+
+The seed supplies synthetic profile IDs only; create matching local Supabase Auth users/tokens outside source control. It never stores passwords. `40000000-0000-4000-8000-000000000006` is `DEMO_ADMIN`; `40000000-0000-4000-8000-000000000007` is `PLATFORM_MANAGEMENT`. Provider A and B operations identities are IDs ending `...002` and `...003`. The JWT `sub` must match the seeded profile ID.
+
+### Client request examples
+
+```bash
+# Scoped feed/data-quality reads
+curl -H "Authorization: Bearer <access-token>" \
+  'http://localhost:3000/api/v1/feed-health?limit=50'
+curl -H "Authorization: Bearer <access-token>" \
+  'http://localhost:3000/api/v1/data-quality/incidents?outletId=30000000-0000-4000-8000-000000000001'
+
+# Redacted aggregate; management/admin token required
+curl -H "Authorization: Bearer <management-access-token>" \
+  http://localhost:3000/api/v1/management/readiness
+```
+
+Workflow mutations remain replay-safe: send a unique `Idempotency-Key` and the current case `version`. Reads do not use idempotency keys.
+
 ## Environment
 
 | Variable | Default | Purpose |
@@ -150,3 +179,5 @@ Every case command requires a caller-owned `Idempotency-Key` and the current opt
 | `INGESTION_PROVIDER_A_KEY` | none | Provider A server-to-server ingestion credential |
 | `INGESTION_PROVIDER_B_KEY` | none | Provider B server-to-server ingestion credential |
 | `INGESTION_PROVIDER_C_KEY` | none | Provider C server-to-server ingestion credential |
+| `SUPABASE_JWT_AUDIENCE` | `authenticated` | Required JWT audience |
+| `SUPABASE_JWT_ISSUER` | derived from `SUPABASE_URL` when set | Expected JWT issuer |

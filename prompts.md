@@ -80,3 +80,12 @@ keep every action versioned and idempotent, write case event and audit event tog
 make timeline append-only and provider scoped
 never let case or alert action touch transaction or balance data
 test lifecycle, invalid transition, cross-provider access, duplicate command and audit trail before finish
+
+Commit 10:
+
+finish every client API still missing, especially feed health, data quality and management readiness
+make filters/pagination scoped and validated
+make catalog routes use real jwt/rls now, no temporary placeholder
+freeze openapi contract at 1.0.0 with examples, errors, auth and scope behavior
+update env/readme/reset/scenario docs so web and mobile can integrate without guessing
+test every documented route and unauthorized access before finish

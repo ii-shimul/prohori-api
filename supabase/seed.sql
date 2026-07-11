@@ -22,7 +22,8 @@ insert into app.profiles (id, display_name, locale, is_active) values
   ('40000000-0000-4000-8000-000000000003', 'Operations B', 'bn', true),
   ('40000000-0000-4000-8000-000000000004', 'Data Steward C', 'en', true),
   ('40000000-0000-4000-8000-000000000005', 'Validation Auditor', 'en', true),
-  ('40000000-0000-4000-8000-000000000006', 'Demo Administrator', 'en', true);
+  ('40000000-0000-4000-8000-000000000006', 'Demo Administrator', 'en', true),
+  ('40000000-0000-4000-8000-000000000007', 'Platform Management', 'en', true);
 
 insert into app.provider_memberships (user_id, provider_id, role, is_active) values
   ('40000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'OUTLET_AGENT', true),
@@ -30,7 +31,8 @@ insert into app.provider_memberships (user_id, provider_id, role, is_active) val
   ('40000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000002', 'PROVIDER_OPERATIONS', true),
   ('40000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000003', 'DATA_STEWARD', true),
   ('40000000-0000-4000-8000-000000000005', '10000000-0000-4000-8000-000000000001', 'VALIDATION_AUDITOR', true),
-  ('40000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000001', 'DEMO_ADMIN', true);
+  ('40000000-0000-4000-8000-000000000006', '10000000-0000-4000-8000-000000000001', 'DEMO_ADMIN', true),
+  ('40000000-0000-4000-8000-000000000007', '10000000-0000-4000-8000-000000000001', 'PLATFORM_MANAGEMENT', true);
 
 insert into app.outlet_assignments (user_id, outlet_id, area_id, provider_id, role, is_active) values
   ('40000000-0000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'OUTLET_AGENT', true),

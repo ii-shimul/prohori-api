@@ -2,14 +2,25 @@ import { OutletStatus, ProviderCode, ProviderStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { ProvidersService } from './providers.service';
 
+const user = {
+  id: '40000000-0000-4000-8000-000000000001',
+  role: 'authenticated' as const,
+};
+
 describe('ProvidersService', () => {
   const findAreas = jest.fn();
   const findOutlets = jest.fn();
   const findProviders = jest.fn();
-  const prisma = {
+  const tx = {
+    $executeRaw: jest.fn(),
     area: { findMany: findAreas },
     outlet: { findMany: findOutlets },
     provider: { findMany: findProviders },
+  };
+  const prisma = {
+    $transaction: jest.fn(
+      (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
+    ),
   } as unknown as PrismaService;
   const service = new ProvidersService(prisma);
 
@@ -17,7 +28,7 @@ describe('ProvidersService', () => {
     jest.clearAllMocks();
   });
 
-  it('returns providers in code order', async () => {
+  it('returns providers in code order inside an RLS transaction', async () => {
     findProviders.mockResolvedValue([
       {
         code: ProviderCode.PROVIDER_A,
@@ -27,7 +38,7 @@ describe('ProvidersService', () => {
       },
     ]);
 
-    await expect(service.listProviders()).resolves.toEqual([
+    await expect(service.listProviders(user)).resolves.toEqual([
       {
         code: 'PROVIDER_A',
         id: 'provider-a',
@@ -35,12 +46,13 @@ describe('ProvidersService', () => {
         status: 'ACTIVE',
       },
     ]);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(3);
   });
 
   it('filters outlets by area code when supplied', async () => {
     findOutlets.mockResolvedValue([]);
 
-    await service.listOutlets('DHAKA_NORTH');
+    await service.listOutlets(user, 'DHAKA_NORTH');
 
     expect(findOutlets).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -52,7 +64,7 @@ describe('ProvidersService', () => {
   it('does not add an outlet filter when area code is absent', async () => {
     findOutlets.mockResolvedValue([]);
 
-    await service.listOutlets();
+    await service.listOutlets(user);
 
     expect(findOutlets).toHaveBeenCalledWith(
       expect.objectContaining({ where: undefined }),
@@ -77,7 +89,7 @@ describe('ProvidersService', () => {
       },
     ]);
 
-    await expect(service.listOutlets()).resolves.toEqual([
+    await expect(service.listOutlets(user)).resolves.toEqual([
       {
         area: {
           code: 'DHAKA_NORTH',

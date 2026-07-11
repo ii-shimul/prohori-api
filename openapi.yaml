@@ -1,10 +1,14 @@
 openapi: 3.1.0
 info:
   title: Prohori API
-  version: 0.5.0
+  version: 1.0.0
   description: |
-    Synthetic decision-support API for provider liquidity, unusual activity review,
-    data quality, and case coordination. It never performs financial actions.
+    Contract freeze 1.0.0 (Step 10): synthetic decision-support API for provider
+    liquidity, unusual activity review, data quality, and case coordination. It never
+    performs financial actions. All non-health requests require a verified Supabase JWT;
+    scope is derived from memberships, outlet assignments, and alert routing. Query
+    filters only narrow that server-enforced scope. Mutating workflow routes require an
+    `Idempotency-Key`; read routes never require one.
   license:
     name: UNLICENSED
 servers:
@@ -538,6 +542,65 @@ paths:
       parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionedCommand' } } } }
       responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /feed-health:
+    get:
+      operationId: listFeedHealth
+      summary: List provider feed freshness and derived data quality in caller scope
+      description: Requires a verified JWT and provider membership. `providerId` and `outletId` are narrowing filters; outlet filtering derives quality only from incidents visible at that outlet. Cursor pagination is stable by receipt time and ID.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/ProviderFilter'
+        - $ref: '#/components/parameters/OutletFilter'
+      responses:
+        '200':
+          description: Scoped feed-health page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedHealthPage' }
+              example:
+                items: [{ providerId: 10000000-0000-4000-8000-000000000001, sequence: '14', receivedAt: '2026-01-01T12:00:30.000Z', qualityStatus: degraded, dataQuality: degraded, activeIncidentCount: 1, latestIncidentAt: '2026-01-01T12:00:30.000Z' }]
+                nextCursor: null
+        '400': { $ref: '#/components/responses/StandardError' }
+        '401': { $ref: '#/components/responses/StandardError' }
+  /data-quality/incidents:
+    get:
+      operationId: listDataQualityIncidents
+      summary: List scoped feed data-quality incidents
+      description: Requires a verified JWT. Filters and cursor pagination only narrow RLS-authorized incidents; cross-provider IDs return no additional data.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/ProviderFilter'
+        - $ref: '#/components/parameters/OutletFilter'
+      responses:
+        '200':
+          description: Scoped data-quality incident page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataQualityIncidentPage' }
+              example:
+                items: [{ id: 50000000-0000-4000-8000-000000000001, providerId: 10000000-0000-4000-8000-000000000001, outletId: 30000000-0000-4000-8000-000000000001, category: FRESHNESS_LAG, details: { lagMinutes: 20 }, detectedAt: '2026-01-01T12:00:30.000Z', resolvedAt: null }]
+                nextCursor: null
+        '400': { $ref: '#/components/responses/StandardError' }
+        '401': { $ref: '#/components/responses/StandardError' }
+  /management/readiness:
+    get:
+      operationId: getManagementReadiness
+      summary: Get fixed, redacted platform readiness aggregate
+      description: Requires a verified JWT plus `PLATFORM_MANAGEMENT` or `DEMO_ADMIN` membership. Returns only aggregate counts and timestamps; it never exposes provider, outlet, transaction, balance, or incident details.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Redacted management aggregate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagementReadiness' }
+              example: { generatedAt: '2026-01-01T12:00:30.000Z', providersReporting: 3, providersDegraded: 1, providersUnreliable: 0, activeIncidentCount: 2, unresolvedOutletCount: 1, latestFeedReceivedAt: '2026-01-01T12:00:30.000Z' }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '403': { $ref: '#/components/responses/StandardError' }
 components:
   securitySchemes:
     providerIngestKey:
@@ -549,6 +612,28 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    PageLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    PageCursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, format: uuid }
+    ProviderFilter:
+      name: providerId
+      in: query
+      required: false
+      schema: { type: string, format: uuid }
+      description: Narrowing filter only; it cannot expand verified provider scope.
+    OutletFilter:
+      name: outletId
+      in: query
+      required: false
+      schema: { type: string, format: uuid }
+      description: Narrowing filter only; it cannot expand verified outlet scope.
     CaseId:
       name: id
       in: path
@@ -970,6 +1055,53 @@ components:
       properties:
         assigneeUserId: { type: string, format: uuid, description: Must be a recipient derived from alert routing. }
 
+    FeedHealthPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [providerId, sequence, receivedAt, qualityStatus, dataQuality, activeIncidentCount, latestIncidentAt]
+            properties:
+              providerId: { type: string, format: uuid }
+              sequence: { type: string }
+              receivedAt: { type: string, format: date-time }
+              qualityStatus: { type: string, enum: [healthy, degraded] }
+              dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
+              activeIncidentCount: { type: integer, minimum: 0 }
+              latestIncidentAt: { type: [string, 'null'], format: date-time }
+        nextCursor: { type: [string, 'null'], format: uuid }
+    DataQualityIncidentPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, providerId, outletId, category, details, detectedAt, resolvedAt]
+            properties:
+              id: { type: string, format: uuid }
+              providerId: { type: [string, 'null'], format: uuid }
+              outletId: { type: [string, 'null'], format: uuid }
+              category: { type: string }
+              details: { type: object, additionalProperties: true }
+              detectedAt: { type: string, format: date-time }
+              resolvedAt: { type: [string, 'null'], format: date-time }
+        nextCursor: { type: [string, 'null'], format: uuid }
+    ManagementReadiness:
+      type: object
+      required: [generatedAt, providersReporting, providersDegraded, providersUnreliable, activeIncidentCount, unresolvedOutletCount, latestFeedReceivedAt]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        providersReporting: { type: integer, minimum: 0 }
+        providersDegraded: { type: integer, minimum: 0 }
+        providersUnreliable: { type: integer, minimum: 0 }
+        activeIncidentCount: { type: integer, minimum: 0 }
+        unresolvedOutletCount: { type: integer, minimum: 0 }
+        latestFeedReceivedAt: { type: [string, 'null'], format: date-time }
     StandardError:
       type: object
       required: [code, message, fieldErrors, correlationId]
@@ -988,8 +1120,16 @@ components:
           type: string
   responses:
     StandardError:
-      description: Standard API error response
+      description: Standard safe error response. Authentication failures use `MISSING_ACCESS_TOKEN` or `INVALID_ACCESS_TOKEN`; malformed filters use a route-specific `INVALID_*_QUERY`; unauthorized scope is represented without disclosing whether a guessed resource exists.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/StandardError'
+          example:
+            code: MISSING_ACCESS_TOKEN
+            message: A Supabase bearer access token is required.
+            fieldErrors: {}
+            correlationId: 00000000-0000-4000-8000-000000000001

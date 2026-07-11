@@ -98,27 +98,21 @@ describe('Health endpoint (e2e)', () => {
     });
   });
 
-  it.each(['/api/v1/providers', '/api/v1/areas', '/api/v1/outlets'])(
-    'keeps catalog route %s unavailable until scoped reads are configured',
-    async (url) => {
-      const response = await app.inject({ method: 'GET', url });
+  it.each([
+    '/api/v1/providers',
+    '/api/v1/areas',
+    '/api/v1/outlets',
+    '/api/v1/feed-health',
+    '/api/v1/data-quality/incidents',
+    '/api/v1/management/readiness',
+  ])('rejects unauthenticated scoped read route %s', async (url) => {
+    const response = await app.inject({ method: 'GET', url });
 
-      const body = JSON.parse(response.body) as {
-        code: string;
-        correlationId: string;
-        fieldErrors: Record<string, string[]>;
-        message: string;
-      };
-
-      expect(response.statusCode).toBe(503);
-      expect(body).toMatchObject({
-        code: 'AUTH_NOT_CONFIGURED',
-        fieldErrors: {},
-        message: 'Catalog access requires authentication setup from Step 3.',
-      });
-      expect(body.correlationId).toMatch(/^[0-9a-f-]{36}$/i);
-    },
-  );
+    expect(response.statusCode).toBe(401);
+    expect(JSON.parse(response.body)).toMatchObject({
+      code: 'MISSING_ACCESS_TOKEN',
+    });
+  });
 
   afterEach(async () => {
     await app.close();

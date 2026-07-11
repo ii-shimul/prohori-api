@@ -20,6 +20,9 @@ const environmentSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'log', 'debug', 'verbose'])
     .default('log'),
+  INGESTION_PROVIDER_A_KEY: z.string().min(1).optional(),
+  INGESTION_PROVIDER_B_KEY: z.string().min(1).optional(),
+  INGESTION_PROVIDER_C_KEY: z.string().min(1).optional(),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;
