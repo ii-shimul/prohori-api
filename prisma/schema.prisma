@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["app"]
+}
+
+enum ProviderCode {
+  PROVIDER_A
+  PROVIDER_B
+  PROVIDER_C
+
+  @@map("provider_code")
+  @@schema("app")
+}
+
+enum UserRole {
+  OUTLET_AGENT
+  PROVIDER_OPERATIONS
+  PLATFORM_MANAGEMENT
+  DATA_STEWARD
+  VALIDATION_AUDITOR
+  DEMO_ADMIN
+
+  @@map("user_role")
+  @@schema("app")
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("provider_status")
+  @@schema("app")
+}
+
+enum OutletStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("outlet_status")
+  @@schema("app")
+}
+
+model Provider {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        ProviderCode         @unique
+  name        String               @unique
+  status      ProviderStatus       @default(ACTIVE)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  memberships ProviderMembership[]
+  assignments OutletAssignment[]
+
+  @@map("providers")
+  @@schema("app")
+}
+
+model Area {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String             @unique
+  name        String
+  parentId    String?            @map("parent_id") @db.Uuid
+  parent      Area?              @relation("AreaHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Area[]             @relation("AreaHierarchy")
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  outlets     Outlet[]
+  assignments OutletAssignment[]
+
+  @@unique([parentId, name])
+  @@map("areas")
+  @@schema("app")
+}
+
+model Outlet {
+  id          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  areaId      String             @map("area_id") @db.Uuid
+  area        Area               @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  code        String             @unique
+  name        String
+  tier        Int
+  timezone    String             @default("Asia/Dhaka")
+  status      OutletStatus       @default(ACTIVE)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  assignments OutletAssignment[]
+
+  @@map("outlets")
+  @@schema("app")
+}
+
+model Profile {
+  id          String               @id @db.Uuid
+  displayName String               @map("display_name")
+  locale      String               @default("en")
+  isActive    Boolean              @default(true) @map("is_active")
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  memberships ProviderMembership[]
+  assignments OutletAssignment[]
+
+  @@map("profiles")
+  @@schema("app")
+}
+
+model ProviderMembership {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  user       Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId String       @map("provider_id") @db.Uuid
+  provider   Provider     @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  role       UserRole
+  isActive   Boolean      @default(true) @map("is_active")
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([userId, providerId, role])
+  @@index([userId])
+  @@index([providerId])
+  @@map("provider_memberships")
+  @@schema("app")
+}
+
+model OutletAssignment {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String        @map("user_id") @db.Uuid
+  user       Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outletId   String        @map("outlet_id") @db.Uuid
+  outlet     Outlet        @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  areaId     String        @map("area_id") @db.Uuid
+  area       Area          @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  providerId String?       @map("provider_id") @db.Uuid
+  provider   Provider?     @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  role       UserRole
+  isActive   Boolean       @default(true) @map("is_active")
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@index([outletId])
+  @@index([areaId])
+  @@index([providerId])
+  @@map("outlet_assignments")
+  @@schema("app")
+}

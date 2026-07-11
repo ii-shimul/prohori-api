@@ -21,7 +21,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "openapi:lint": "redocly lint openapi.yaml",
-    "db:reset": "node scripts/db-reset.mjs",
+    "prisma:generate": "prisma generate",
+    "db:reset": "supabase db reset --local",
     "scenario:reset": "node scripts/scenario-reset.mjs"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-fastify": "^11.1.28",
+    "@prisma/client": "^6.19.3",
     "fastify": "^5.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -50,7 +52,9 @@
     "globals": "^17.0.0",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
+    "prisma": "^6.19.3",
     "source-map-support": "^0.5.21",
+    "supabase": "^2.109.1",
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",

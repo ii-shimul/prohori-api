@@ -1,0 +1,97 @@
+import { OutletStatus, ProviderCode, ProviderStatus } from '@prisma/client';
+import { PrismaService } from '../database/prisma.service';
+import { ProvidersService } from './providers.service';
+
+describe('ProvidersService', () => {
+  const findAreas = jest.fn();
+  const findOutlets = jest.fn();
+  const findProviders = jest.fn();
+  const prisma = {
+    area: { findMany: findAreas },
+    outlet: { findMany: findOutlets },
+    provider: { findMany: findProviders },
+  } as unknown as PrismaService;
+  const service = new ProvidersService(prisma);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns providers in code order', async () => {
+    findProviders.mockResolvedValue([
+      {
+        code: ProviderCode.PROVIDER_A,
+        id: 'provider-a',
+        name: 'Provider A',
+        status: ProviderStatus.ACTIVE,
+      },
+    ]);
+
+    await expect(service.listProviders()).resolves.toEqual([
+      {
+        code: 'PROVIDER_A',
+        id: 'provider-a',
+        name: 'Provider A',
+        status: 'ACTIVE',
+      },
+    ]);
+  });
+
+  it('filters outlets by area code when supplied', async () => {
+    findOutlets.mockResolvedValue([]);
+
+    await service.listOutlets('DHAKA_NORTH');
+
+    expect(findOutlets).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { area: { code: 'DHAKA_NORTH' } },
+      }),
+    );
+  });
+
+  it('does not add an outlet filter when area code is absent', async () => {
+    findOutlets.mockResolvedValue([]);
+
+    await service.listOutlets();
+
+    expect(findOutlets).toHaveBeenCalledWith(
+      expect.objectContaining({ where: undefined }),
+    );
+  });
+
+  it('preserves area data in outlet results', async () => {
+    findOutlets.mockResolvedValue([
+      {
+        area: {
+          code: 'DHAKA_NORTH',
+          id: 'area-1',
+          name: 'Dhaka North',
+          parentId: null,
+        },
+        code: 'DN-001',
+        id: 'outlet-1',
+        name: 'Uttara Synthetic Outlet',
+        status: OutletStatus.ACTIVE,
+        tier: 1,
+        timezone: 'Asia/Dhaka',
+      },
+    ]);
+
+    await expect(service.listOutlets()).resolves.toEqual([
+      {
+        area: {
+          code: 'DHAKA_NORTH',
+          id: 'area-1',
+          name: 'Dhaka North',
+          parentId: null,
+        },
+        code: 'DN-001',
+        id: 'outlet-1',
+        name: 'Uttara Synthetic Outlet',
+        status: 'ACTIVE',
+        tier: 1,
+        timezone: 'Asia/Dhaka',
+      },
+    ]);
+  });
+});

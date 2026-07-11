@@ -50,6 +50,33 @@ describe('Health endpoint (e2e)', () => {
     expect(response.headers['x-correlation-id']).toBe(correlationId);
   });
 
+  it.each([
+    '/api/v1/me',
+    '/api/v1/providers',
+    '/api/v1/areas',
+    '/api/v1/outlets',
+  ])(
+    'keeps catalog route %s unavailable until auth is configured',
+    async (url) => {
+      const response = await app.inject({ method: 'GET', url });
+
+      const body = JSON.parse(response.body) as {
+        code: string;
+        correlationId: string;
+        fieldErrors: Record<string, string[]>;
+        message: string;
+      };
+
+      expect(response.statusCode).toBe(503);
+      expect(body).toMatchObject({
+        code: 'AUTH_NOT_CONFIGURED',
+        fieldErrors: {},
+        message: 'Catalog access requires authentication setup from Step 3.',
+      });
+      expect(body.correlationId).toMatch(/^[0-9a-f-]{36}$/i);
+    },
+  );
+
   afterEach(async () => {
     await app.close();
   });

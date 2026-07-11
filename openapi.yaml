@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Prohori API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Synthetic decision-support API for provider liquidity, unusual activity review,
     data quality, and case coordination. It never performs financial actions.
@@ -30,10 +30,97 @@ paths:
                 status: ok
         '500':
           $ref: '#/components/responses/StandardError'
+  /me:
+    get:
+      operationId: getCurrentUser
+      summary: Get authenticated profile and authorization scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated profile. Implemented in Step 3.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/StandardError'
+        '503':
+          $ref: '#/components/responses/StandardError'
+  /providers:
+    get:
+      operationId: listProviders
+      summary: List synthetic providers available in caller scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Providers in caller scope
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Provider'
+        '401':
+          $ref: '#/components/responses/StandardError'
+        '503':
+          $ref: '#/components/responses/StandardError'
+  /areas:
+    get:
+      operationId: listAreas
+      summary: List synthetic areas available in caller scope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Areas in caller scope
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Area'
+        '401':
+          $ref: '#/components/responses/StandardError'
+        '503':
+          $ref: '#/components/responses/StandardError'
+  /outlets:
+    get:
+      operationId: listOutlets
+      summary: List synthetic outlets available in caller scope
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: areaCode
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 50
+          example: DHAKA_NORTH
+      responses:
+        '200':
+          description: Outlets in caller scope
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Outlet'
+        '401':
+          $ref: '#/components/responses/StandardError'
+        '503':
+          $ref: '#/components/responses/StandardError'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   headers:
     CorrelationId:
-      description: Request correlation identifier. Client-supplied values are echoed when valid.
+      description: Request correlation identifier. Client-supplied valid UUID values are echoed.
       schema:
         type: string
         format: uuid
@@ -48,6 +135,76 @@ components:
         status:
           type: string
           const: ok
+    Provider:
+      type: object
+      required: [id, code, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          enum: [PROVIDER_A, PROVIDER_B, PROVIDER_C]
+        name:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    Area:
+      type: object
+      required: [id, code, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: [string, 'null']
+          format: uuid
+    Outlet:
+      type: object
+      required: [id, code, name, area, tier, timezone, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        area:
+          $ref: '#/components/schemas/Area'
+        tier:
+          type: integer
+          minimum: 1
+          maximum: 5
+        timezone:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    CurrentUser:
+      type: object
+      description: Implemented with verified Supabase identity in Step 3.
+      required: [id, locale, memberships, assignments]
+      properties:
+        id:
+          type: string
+          format: uuid
+        locale:
+          type: string
+          enum: [en, bn]
+        memberships:
+          type: array
+          items:
+            type: object
+        assignments:
+          type: array
+          items:
+            type: object
     StandardError:
       type: object
       required: [code, message, fieldErrors, correlationId]
