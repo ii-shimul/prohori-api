@@ -1,26 +1,53 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { createApplication } from './../src/main';
 
-describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+describe('Health endpoint (e2e)', () => {
+  let app: NestFastifyApplication;
 
   beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
+    app = await createApplication();
     await app.init();
+    await app.getHttpAdapter().getInstance().ready();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+  it('returns live status and a correlation ID', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/health/live',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      service: 'prohori-api',
+      status: 'ok',
+    });
+    expect(response.headers['x-correlation-id']).toEqual(
+      expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    );
+  });
+
+  it('replaces an invalid client correlation ID', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/health/live',
+      headers: { 'x-correlation-id': 'not-a-uuid' },
+    });
+
+    expect(response.headers['x-correlation-id']).toEqual(
+      expect.stringMatching(/^[0-9a-f-]{36}$/i),
+    );
+    expect(response.headers['x-correlation-id']).not.toBe('not-a-uuid');
+  });
+
+  it('echoes a valid client correlation ID', async () => {
+    const correlationId = '00000000-0000-4000-8000-000000000001';
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/health/live',
+      headers: { 'x-correlation-id': correlationId },
+    });
+
+    expect(response.headers['x-correlation-id']).toBe(correlationId);
   });
 
   afterEach(async () => {
