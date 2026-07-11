@@ -141,3 +141,61 @@ model OutletAssignment {
   @@map("outlet_assignments")
   @@schema("app")
 }
+
+enum TransactionType {
+  CASH_IN
+  CASH_OUT
+
+  @@map("transaction_type")
+  @@schema("app")
+}
+
+enum TransactionLifecycle {
+  PENDING
+  SETTLED
+  FAILED
+  REVERSED
+
+  @@map("transaction_lifecycle")
+  @@schema("app")
+}
+
+model OutletCashBalance {
+  outletId    String   @id @map("outlet_id") @db.Uuid
+  amountMinor BigInt   @map("amount_minor")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("outlet_cash_balances")
+  @@schema("app")
+}
+
+model ProviderBalance {
+  outletId    String   @map("outlet_id") @db.Uuid
+  providerId  String   @map("provider_id") @db.Uuid
+  amountMinor BigInt   @map("amount_minor")
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@id([outletId, providerId])
+  @@map("provider_balances")
+  @@schema("app")
+}
+
+model Transaction {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId      String               @map("provider_id") @db.Uuid
+  outletId        String               @map("outlet_id") @db.Uuid
+  feedBatchId     String?              @map("feed_batch_id") @db.Uuid
+  providerEventId String               @map("provider_event_id")
+  eventVersion    Int                  @default(1) @map("event_version")
+  type            TransactionType
+  lifecycle       TransactionLifecycle
+  amountMinor     BigInt               @map("amount_minor")
+  occurredAt      DateTime             @map("occurred_at") @db.Timestamptz(6)
+  idempotencyKey  String               @map("idempotency_key")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([providerId, providerEventId])
+  @@unique([providerId, idempotencyKey])
+  @@map("transactions")
+  @@schema("app")
+}

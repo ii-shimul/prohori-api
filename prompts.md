@@ -30,4 +30,8 @@ Commit 4:
 add liquidity/feed tables and correct cash-in/cash-out balance rules
 shared cash and provider e-money must always stay separate
 test pending, failed, reversed and duplicate cases too
-dont add simulation or analytics yet
+
+after balance rules work, add prisma models and normal synthetic seed balances/transactions too
+make sure the same seed always gives same starting data
+keep this step only about liquidity data and balance semantics, dont add simulation or analytics yet
+test everything before finish
