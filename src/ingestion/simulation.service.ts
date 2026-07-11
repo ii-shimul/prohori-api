@@ -92,12 +92,12 @@ export class SimulationService {
   }
 
   private ingestFixture(scenario: ScenarioCode, step: number) {
-    const fixture = makeFixture(scenario, step);
+    const fixture = buildScenarioFixture(scenario, step);
     return this.ingestion.ingest(fixture.provider, fixture.batch);
   }
 }
 
-function makeFixture(
+export function buildScenarioFixture(
   scenario: ScenarioCode,
   step: number,
 ): { batch: IngestionBatch; provider: ProviderCode } {
@@ -105,8 +105,14 @@ function makeFixture(
   const minute = String(step).padStart(2, '0');
   const occurredAt = `2026-01-01T08:${minute}:00.000Z`;
   const receivedAt = `2026-01-01T08:${minute}:30.000Z`;
+  // D starts from the same provider-pressure evidence as A so it can drive the
+  // alert-to-case review lifecycle without manual database edits.
   const amountMinor =
-    scenario === 'A' ? 50000 : scenario === 'B' ? 30000 : 10000;
+    scenario === 'A' || scenario === 'D'
+      ? 50000
+      : scenario === 'B'
+        ? 30000
+        : 10000;
   const raw = {
     events: Array.from({ length: scenario === 'B' ? 4 : 1 }, (_, index) => ({
       amountMinor,

@@ -25,7 +25,10 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase start && supabase db reset --local",
-    "scenario:reset": "node scripts/scenario-reset.mjs"
+    "gate:no-financial-action": "node scripts/no-financial-action-proof.mjs",
+    "gate:step-11": "npm run test && npm run test:e2e && npm run gate:no-financial-action",
+    "gate:final-freeze": "npm run gate:step-11",
+    "rehearsal:clean-reset": "npm run db:reset && npm run prisma:generate && npm run build && npm run gate:final-freeze"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

@@ -17,6 +17,18 @@ const environmentSchema = z.object({
       'CORS_ORIGIN must name an explicit origin',
     )
     .default('http://localhost:3000'),
+  CORS_ORIGINS: z
+    .string()
+    .optional()
+    .refine(
+      (value) =>
+        !value ||
+        value
+          .split(',')
+          .map((origin) => origin.trim())
+          .every((origin) => origin.length > 0 && isExplicitOrigin(origin)),
+      'CORS_ORIGINS must be a comma-separated list of explicit origins',
+    ),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'log', 'debug', 'verbose'])
     .default('log'),
@@ -31,4 +43,23 @@ export function validateEnvironment(
   config: Record<string, unknown>,
 ): Environment {
   return environmentSchema.parse(config);
+}
+
+export function getAllowedCorsOrigins(
+  environment: Pick<Environment, 'CORS_ORIGIN' | 'CORS_ORIGINS'>,
+): string[] {
+  const configuredOrigins = environment.CORS_ORIGINS ?? environment.CORS_ORIGIN;
+
+  return [
+    ...new Set(configuredOrigins.split(',').map((origin) => origin.trim())),
+  ];
+}
+
+function isExplicitOrigin(value: string): boolean {
+  try {
+    const origin = new URL(value);
+    return origin.origin === value && value !== '*';
+  } catch {
+    return false;
+  }
 }

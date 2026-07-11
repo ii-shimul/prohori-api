@@ -26,6 +26,23 @@ describe('Health endpoint (e2e)', () => {
     );
   });
 
+  it('allows the configured browser origin to preflight bearer-authenticated reads', async () => {
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/me',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'authorization,x-correlation-id',
+      },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe(
+      'http://localhost:3000',
+    );
+  });
+
   it('replaces an invalid client correlation ID', async () => {
     const response = await app.inject({
       method: 'GET',

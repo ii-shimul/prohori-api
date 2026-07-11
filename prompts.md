@@ -89,3 +89,17 @@ make catalog routes use real jwt/rls now, no temporary placeholder
 freeze openapi contract at 1.0.0 with examples, errors, auth and scope behavior
 update env/readme/reset/scenario docs so web and mobile can integrate without guessing
 test every documented route and unauthorized access before finish
+
+Commit 11:
+
+make final security and scenario gates we can run from clean reset
+prove provider A cannot access provider B with guessed ids, filters or mutations
+prove no public workflow endpoint can touch transaction or balance ledger
+run deterministic Scenario A to D checks, including full case lifecycle and audit timeline
+add scripts and readme commands so final demo validation is repeatable
+test everything possible before finish
+make backend ready for web and mobile integration, but do not change frozen 1.0.0 contract unless there is real blocker
+add clear client setup, CORS config and clean-reset rehearsal instructions
+add final freeze checks without named web/mobile/provider token env vars
+run all backend validation, document only Docker/local Supabase requirement
+after this, freeze features and only fix integration/security/demo blockers

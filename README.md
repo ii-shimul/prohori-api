@@ -55,7 +55,30 @@ npm run build
 npm run test
 npm run test:e2e
 npm run db:reset
+npm run gate:no-financial-action
 ```
+
+## Step 11 clean-reset, security, and scenario gates
+
+The final gate has no access-token setup. It runs the automated unit/e2e coverage and the static no-financial-action proof:
+
+```bash
+npm run gate:step-11
+```
+
+The unit suite proves deterministic A–D scenario fixtures, simulation authorization, provider/outlet scope enforcement, workflow audit behavior, and quality safeguards such as unreliable-data ETA suppression. The e2e suite proves CORS preflight and that protected API routes reject missing bearer JWTs. `gate:no-financial-action` checks the OpenAPI POST allowlist and verifies that alert/case source does not reference transaction or balance models. Normal routes remain protected by verified Supabase JWTs, server-side scope checks, and RLS.
+
+## Step 12 final integration and freeze
+
+The final client release is documented in [`docs/client-integration-release.md`](./docs/client-integration-release.md). It contains the frozen 1.0.0 contract, exact web/mobile base-URL setup, seed identities (without credentials), authentication/scope rules, request flow, pair-test variables, clean-reset rehearsal, and freeze exceptions.
+
+Run the final evidence suite without access-token setup:
+
+```bash
+npm run rehearsal:clean-reset
+```
+
+`rehearsal:clean-reset` resets the local database, generates Prisma, builds the API, and runs the automated Step 11/final gate. That gate runs unit/e2e coverage for security and deterministic scenarios plus the no-financial-action proof. It does not provision users or bypass authentication; protected-route JWT and authorization behavior remains covered by automated tests.
 
 ## Provider ingestion and deterministic simulation
 
@@ -71,7 +94,7 @@ curl -X POST http://localhost:3000/api/v1/simulation/start -H "Authorization: Be
 curl -X POST http://localhost:3000/api/v1/simulation/step -H "Authorization: Bearer <admin-jwt>" -H 'Content-Type: application/json' -d '{"scenario":"A"}'
 ```
 
-`reset` restores seeded baseline balances and removes only simulated feed receipts, ledger events, snapshots, and quality incidents. `start` resets then submits a fixture through the same ingestion service; `step` submits the next deterministic fixture. `ADMIN_ACCESS_TOKEN=<admin-jwt> npm run scenario:reset` is the command-line equivalent (and accepts an optional `API_URL`). Scenarios A–D are synthetic only; scenario C intentionally produces freshness and snapshot-quality evidence.
+`reset` restores seeded baseline balances and removes only simulated feed receipts, ledger events, snapshots, and quality incidents. `start` resets then submits a fixture through the same ingestion service; `step` submits the next deterministic fixture. These controls require a verified `DEMO_ADMIN` Supabase JWT when called over HTTP. Scenarios A–D are synthetic only; scenario C intentionally produces freshness and snapshot-quality evidence.
 
 ## Balance semantics
 
@@ -146,6 +169,13 @@ Every case command requires a caller-owned `Idempotency-Key` and the current opt
 
 [`openapi.yaml`](./openapi.yaml) version **1.0.0** is the frozen client contract for web and mobile. It documents every demo route, bearer or ingestion authentication, scope/role behavior, pagination, idempotency headers, and standard errors. Do not make breaking field, route, or enum changes without an integration blocker and a new contract version.
 
+### Prototype limitations
+
+- All records, identities, and scenarios are synthetic; no real provider, wallet, or customer data is supported.
+- Forecasts are deterministic bounded projections, not production forecasting or a financial recommendation.
+- The API has no automatic financial action and no public transfer, refill, settlement, reversal, freeze, block, or fraud-verdict command.
+- Passing local gates is not a production-readiness claim. Hosted Supabase/Auth configuration, operational monitoring, threat modeling, load testing, and production security review remain required.
+
 ### Demo identities and roles
 
 The seed supplies synthetic profile IDs only; create matching local Supabase Auth users/tokens outside source control. It never stores passwords. `40000000-0000-4000-8000-000000000006` is `DEMO_ADMIN`; `40000000-0000-4000-8000-000000000007` is `PLATFORM_MANAGEMENT`. Provider A and B operations identities are IDs ending `...002` and `...003`. The JWT `sub` must match the seeded profile ID.
@@ -174,7 +204,8 @@ Workflow mutations remain replay-safe: send a unique `Idempotency-Key` and the c
 | `PORT` | `3000` | HTTP listen port |
 | `DATABASE_URL` | local Supabase Postgres | Prisma PostgreSQL connection string |
 | `SUPABASE_URL` | none until Step 3 | Hosted Supabase project URL for Auth/JWKS; not a database URL |
-| `CORS_ORIGIN` | `http://localhost:3000` | Explicit browser origin; wildcard rejected |
+| `CORS_ORIGIN` | `http://localhost:3000` | Backward-compatible single explicit browser origin; wildcard rejected |
+| `CORS_ORIGINS` | none | Optional comma-separated explicit browser-origin allowlist; overrides `CORS_ORIGIN` |
 | `LOG_LEVEL` | `log` | Nest logger level |
 | `INGESTION_PROVIDER_A_KEY` | none | Provider A server-to-server ingestion credential |
 | `INGESTION_PROVIDER_B_KEY` | none | Provider B server-to-server ingestion credential |

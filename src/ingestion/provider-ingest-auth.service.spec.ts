@@ -21,12 +21,25 @@ describe('ProviderIngestAuthService', () => {
     },
   );
 
-  it('denies a credential used against another provider path', () => {
-    (config.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'INGESTION_PROVIDER_B_KEY' ? 'b-secret' : 'a-secret',
-    );
-    expect(() => service.authenticate('PROVIDER_B', 'a-secret')).toThrow(
-      'invalid',
-    );
-  });
+  it.each([
+    ['PROVIDER_A', 'PROVIDER_B'],
+    ['PROVIDER_A', 'PROVIDER_C'],
+    ['PROVIDER_B', 'PROVIDER_A'],
+    ['PROVIDER_B', 'PROVIDER_C'],
+    ['PROVIDER_C', 'PROVIDER_A'],
+    ['PROVIDER_C', 'PROVIDER_B'],
+  ] as const)(
+    'denies %s credential on the %s path',
+    (credentialProvider, pathProvider) => {
+      (config.get as jest.Mock).mockImplementation(
+        (key: string) => `${key}-secret`,
+      );
+      expect(() =>
+        service.authenticate(
+          pathProvider,
+          `INGESTION_${credentialProvider}_KEY-secret`,
+        ),
+      ).toThrow('invalid');
+    },
+  );
 });

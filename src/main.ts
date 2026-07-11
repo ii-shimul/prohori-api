@@ -9,16 +9,23 @@ import {
 import { randomUUID } from 'node:crypto';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AppModule } from './app.module';
+import { Environment, getAllowedCorsOrigins } from './config/env.schema';
 
 export async function createApplication(): Promise<NestFastifyApplication> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
   );
-  const config = app.get(ConfigService);
+  const config = app.get<ConfigService<Environment, true>>(ConfigService);
 
+  const corsOrigins = getAllowedCorsOrigins({
+    CORS_ORIGIN: config.getOrThrow('CORS_ORIGIN'),
+    CORS_ORIGINS: config.get('CORS_ORIGINS'),
+  });
   await app.register(cors, {
-    origin: config.getOrThrow<string>('CORS_ORIGIN'),
+    origin: (origin, callback) => {
+      callback(null, !origin || corsOrigins.includes(origin));
+    },
   });
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new HttpExceptionFilter());
