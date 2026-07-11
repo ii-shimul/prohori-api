@@ -25,6 +25,7 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase start && supabase db reset --local",
+    "seed:check": "node scripts/check-seed-integrity.mjs",
     "gate:no-financial-action": "node scripts/no-financial-action-proof.mjs",
     "gate:step-11": "npm run test && npm run test:e2e && npm run gate:no-financial-action",
     "gate:final-freeze": "npm run gate:step-11",

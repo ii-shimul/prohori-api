@@ -40,6 +40,20 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
+The clean baseline seeds scope/catalog data, 6 shared-cash balances, 18 outlet/provider e-money balances and matching simulation baselines, 3 healthy provider feed batches, 36 settled normal ledger events, 24 matching snapshots, and 6 healthy forecast runs with 96 points. It intentionally seeds **no** quality incidents, anomaly signals/correlations, alerts, cases, audit records, or command idempotency history; scenarios and workflow actions create those records. The three healthy feed batches make the redacted management-readiness projection report all providers as reporting with zero degraded/unreliable providers and zero active incidents.
+
+Run `npm run seed:check` for static seed-shape checks. `supabase db reset --local` also executes SQL assertions for the synthetic baseline’s row counts, balance/snapshot coherence, and healthy feed/forecast data.
+
+### Applying the synthetic baseline to Supabase Cloud
+
+After linking this directory to the intended project, use this non-destructive command:
+
+```bash
+npx supabase db push --linked --include-seed
+```
+
+It applies pending migrations and re-applies `supabase/seed.sql`; it **does not** reset the cloud database. The seed upserts the three baseline provider/area/outlet codes without replacing their existing UUIDs, then resolves those IDs before inserting FK-dependent data. It updates only the deterministic synthetic baseline rows and leaves manually created catalog records plus incident, alert, case, audit, and idempotency history intact. Do **not** use `supabase db reset` against Cloud for this purpose.
+
 Current schema also includes provider-scoped cases, alert links, append-only case events/notes, immutable audit events, command idempotency records, and the Step 10 fixed redacted `platform_readiness_aggregates` projection. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 For a clean local rehearsal, run `npm run db:reset`, then `npm run prisma:generate`. Reset only creates synthetic records; it does not create Supabase Auth users or passwords.
@@ -55,6 +69,7 @@ npm run build
 npm run test
 npm run test:e2e
 npm run db:reset
+npm run seed:check
 npm run gate:no-financial-action
 ```
 

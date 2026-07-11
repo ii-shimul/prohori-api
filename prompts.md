@@ -98,8 +98,15 @@ prove no public workflow endpoint can touch transaction or balance ledger
 run deterministic Scenario A to D checks, including full case lifecycle and audit timeline
 add scripts and readme commands so final demo validation is repeatable
 test everything possible before finish
+
+Commit 12:
+
 make backend ready for web and mobile integration, but do not change frozen 1.0.0 contract unless there is real blocker
 add clear client setup, CORS config and clean-reset rehearsal instructions
-add final freeze checks without named web/mobile/provider token env vars
-run all backend validation, document only Docker/local Supabase requirement
-after this, freeze features and only fix integration/security/demo blockers
+remove named web/mobile/provider access-token env dependencies, normal supabase login jwt is enough
+make cloud seed complete, deterministic and safe to run more than once
+push migrations and baseline seed to cloud supabase, verify row counts and provider names
+use bKash, Nagad and Rocket as provider display names while keeping stable internal provider codes
+fix supabase transaction-pooler config for prisma and document render deployment setup
+add final freeze checks, run all backend validation and verify cloud database before finish
+after this, freeze features and only fix integration, security, deployment or demo blockers
