@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, provider memberships, and outlet assignments. JWT/RLS authorization arrives in Step 3. Set `SUPABASE_URL` to the hosted project URL before starting Step 3; it is distinct from Prisma's `DATABASE_URL`.
+Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, and data-quality incidents. Steps 1–3 are complete. Step 4 balance semantics is in progress. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
@@ -56,6 +56,10 @@ npm run db:reset
 ```
 
 `npm run scenario:reset` intentionally fails until Step 5 provides simulator fixtures.
+
+## Balance semantics
+
+Amounts use integer BDT minor units. Settled `CASH_IN` increases shared physical cash and decreases that provider's e-money. Settled `CASH_OUT` decreases shared cash and increases that provider's e-money. Pending, failed, and reversed events do not apply a new balance effect in this stage. Shared cash and provider e-money are never combined.
 
 ## API contract
 

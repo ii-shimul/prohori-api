@@ -24,3 +24,10 @@ keep it secure, dont trust provider id from request body
 
 update env example/readme if new auth config is needed
 test auth errors, invalid token and provider isolation before finish
+
+Commit 4:
+
+add liquidity/feed tables and correct cash-in/cash-out balance rules
+shared cash and provider e-money must always stay separate
+test pending, failed, reversed and duplicate cases too
+dont add simulation or analytics yet
