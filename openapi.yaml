@@ -419,16 +419,125 @@ paths:
         '404': { $ref: '#/components/responses/StandardError' }
   /alerts/{id}/create-case:
     post:
-      operationId: createAlertCaseRequest
-      summary: Create an idempotent human-review case request from a scoped alert
-      description: Creates only a review coordination record in this release. The complete case lifecycle and audit timeline are added in Step 9.
+      operationId: createAlertCase
+      summary: Create an idempotent, provider-scoped human-review case from an alert
+      description: Creates a review-only case and immutable creation/audit events. Requires a workflow role; it never changes a balance, ledger, provider feed, or financial state.
       security: [{ bearerAuth: [] }]
       parameters: [{ $ref: '#/components/parameters/AlertId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
-        '201': { description: Case request created, content: { application/json: { schema: { $ref: '#/components/schemas/AlertCaseRequestResponse' } } } }
+        '201': { description: Case created, content: { application/json: { schema: { $ref: '#/components/schemas/AlertCaseResponse' } } } }
         '400': { $ref: '#/components/responses/StandardError' }
         '401': { $ref: '#/components/responses/StandardError' }
         '404': { $ref: '#/components/responses/StandardError' }
+  /cases:
+    get:
+      operationId: listCases
+      summary: List provider-scoped review cases
+      description: Caller scope is derived from verified memberships, assignments, and alert routes; query filters can only narrow results.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/CaseState' }
+        - name: outletId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Scoped cases, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Case' } } } } }
+        '401': { $ref: '#/components/responses/StandardError' }
+  /cases/{id}:
+    get:
+      operationId: getCase
+      summary: Get one provider-scoped review case
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Scoped case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /cases/{id}/timeline:
+    get:
+      operationId: getCaseTimeline
+      summary: Get immutable scoped case events, notes, and audit timeline
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Append-only case timeline, content: { application/json: { schema: { $ref: '#/components/schemas/CaseTimeline' } } } }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /cases/{id}/acknowledge:
+    post:
+      operationId: acknowledgeCase
+      summary: Move OPEN case to ACKNOWLEDGED
+      description: 'Requires `version`, `Idempotency-Key`, a workflow role, and provider scope. Review-only: cannot mutate financial tables.'
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionedCommand' }, example: { version: 1 } } } }
+      responses: { '201': { description: Updated case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/assign:
+    post:
+      operationId: assignCase
+      summary: Assign or reassign a case to an active scoped assignee
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CaseAssignment' }, example: { version: 1, assigneeUserId: 40000000-0000-4000-8000-000000000002 } } } }
+      responses: { '201': { description: Updated case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/notes:
+    post:
+      operationId: addCaseNote
+      summary: Add an immutable scoped review note
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CaseNoteCommand' }, example: { version: 2, body: Verification requested from the outlet. } } } }
+      responses: { '201': { description: Updated case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/request-verification:
+    post:
+      operationId: requestCaseVerification
+      summary: Move ACKNOWLEDGED case to INVESTIGATING and record a review request
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SummaryCommand' } } } }
+      responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/escalate:
+    post:
+      operationId: escalateCase
+      summary: Move INVESTIGATING case to ESCALATED
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionedCommand' } } } }
+      responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/disposition:
+    post:
+      operationId: recordCaseDisposition
+      summary: Record a review disposition without changing financial state
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DispositionCommand' } } } }
+      responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/resolve:
+    post:
+      operationId: resolveCase
+      summary: Resolve an INVESTIGATING or ESCALATED case with an allowlisted review code
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResolveCaseCommand' }, example: { version: 4, resolutionCode: VERIFIED_NORMAL_ACTIVITY, resolutionSummary: Review completed; no financial action was taken. } } } }
+      responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/close:
+    post:
+      operationId: closeCase
+      summary: Move RESOLVED case to CLOSED
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionedCommand' } } } }
+      responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
+  /cases/{id}/reopen:
+    post:
+      operationId: reopenCase
+      summary: Reopen a CLOSED case to OPEN, clearing its prior resolution
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/VersionedCommand' } } } }
+      responses: { '201': { description: Updated case }, '400': { $ref: '#/components/responses/StandardError' }, '401': { $ref: '#/components/responses/StandardError' }, '404': { $ref: '#/components/responses/StandardError' } }
 components:
   securitySchemes:
     providerIngestKey:
@@ -440,6 +549,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    CaseId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     AlertId:
       name: id
       in: path
@@ -737,6 +851,77 @@ components:
     AlertType:
       type: string
       enum: [provider_emoney_pressure, shared_cash_pressure, unusual_activity_review, data_quality_issue, combined_review]
+    CaseState:
+      type: string
+      enum: [OPEN, ACKNOWLEDGED, INVESTIGATING, ESCALATED, RESOLVED, CLOSED]
+    VersionedCommand:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1, description: Optimistic case version from the most recent read. }
+    CaseAssignment:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [assigneeUserId]
+          properties: { assigneeUserId: { type: string, format: uuid } }
+    CaseNoteCommand:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [body]
+          properties: { body: { type: string, minLength: 1, maxLength: 4000 } }
+    SummaryCommand:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [summary]
+          properties: { summary: { type: string, minLength: 1, maxLength: 1000 } }
+    DispositionCommand:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [disposition]
+          properties: { disposition: { type: string, minLength: 1, maxLength: 1000 } }
+    ResolveCaseCommand:
+      allOf:
+        - $ref: '#/components/schemas/VersionedCommand'
+        - type: object
+          required: [resolutionCode, resolutionSummary]
+          properties:
+            resolutionCode: { type: string, enum: [VERIFIED_NORMAL_ACTIVITY, DATA_QUALITY_CONFIRMED, ESCALATED_TO_OPERATIONS, NO_FURTHER_REVIEW_REQUIRED] }
+            resolutionSummary: { type: string, minLength: 1, maxLength: 2000 }
+    Case:
+      type: object
+      required: [id, outletId, providerId, state, version, ownerUserId, resolutionCode, resolutionSummary, createdBy, createdAt, updatedAt, resolvedAt, closedAt]
+      properties:
+        id: { type: string, format: uuid }
+        outletId: { type: string, format: uuid }
+        providerId: { type: [string, 'null'], format: uuid }
+        state: { $ref: '#/components/schemas/CaseState' }
+        version: { type: integer, minimum: 1 }
+        ownerUserId: { type: [string, 'null'], format: uuid }
+        resolutionCode: { type: [string, 'null'] }
+        resolutionSummary: { type: [string, 'null'] }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+    CaseTimeline:
+      type: object
+      required: [caseId, events, notes, auditEvents]
+      properties:
+        caseId: { type: string, format: uuid }
+        events: { type: array, items: { type: object, additionalProperties: true } }
+        notes: { type: array, items: { type: object, additionalProperties: true } }
+        auditEvents: { type: array, items: { type: object, additionalProperties: true } }
+    AlertCaseResponse:
+      type: object
+      required: [case, alertId]
+      properties:
+        case: { $ref: '#/components/schemas/Case' }
+        alertId: { type: string, format: uuid }
     Alert:
       type: object
       required: [id, outletId, providerId, resource, type, severity, status, active, episodeStartedAt, lastObservedAt, occurrenceCount, message, evidence, dataQuality, modelConfidence, ownerUserId, acknowledgedAt, acknowledgedBy]
@@ -784,17 +969,7 @@ components:
       required: [assigneeUserId]
       properties:
         assigneeUserId: { type: string, format: uuid, description: Must be a recipient derived from alert routing. }
-    AlertCaseRequestResponse:
-      type: object
-      required: [alert, caseRequest]
-      properties:
-        alert: { $ref: '#/components/schemas/Alert' }
-        caseRequest:
-          type: object
-          required: [id, createdAt]
-          properties:
-            id: { type: string, format: uuid }
-            createdAt: { type: string, format: date-time }
+
     StandardError:
       type: object
       required: [code, message, fieldErrors, correlationId]

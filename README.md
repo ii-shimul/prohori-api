@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, deterministic simulation state/baselines, persisted forecast runs/point snapshots, anomaly signals/correlations, and provider-aware alert episodes, routing, evidence snapshots, action idempotency records, and case-request coordination records. Steps 1–8 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema also includes provider-scoped cases, alert links, append-only case events/notes, immutable audit events, and command idempotency records. Steps 1–9 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
@@ -96,6 +96,8 @@ Current routes:
 - `GET /alerts?active=true&outletId={uuid}&type={alert-type}` — routed review-only alert episodes.
 - `GET /alerts/{id}` — scoped alert plus immutable evidence snapshots.
 - `POST /alerts/{id}/acknowledge`, `POST /alerts/{id}/assign`, `POST /alerts/{id}/create-case` — require `Idempotency-Key`; workflow-only and never mutate balances or transactions.
+- `GET /cases`, `GET /cases/{id}`, `GET /cases/{id}/timeline` — provider-scoped case views; timeline contains append-only events, notes, and audit records.
+- `POST /cases/{id}/acknowledge`, `/assign`, `/notes`, `/request-verification`, `/escalate`, `/disposition`, `/resolve`, `/close`, `/reopen` — require `Idempotency-Key` and body `version`; all are review-only commands.
 - `POST /simulation/reset`, `POST /simulation/start`, `POST /simulation/step` (DEMO_ADMIN only)
 
 Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step 3 adds verified Supabase JWT authentication and scope enforcement. They are never temporarily public.
@@ -127,7 +129,13 @@ Scenario B submits four same-amount `CASH_OUT` events through the normal ingesti
 
 Forecasts, unusual-activity signals, quality incidents, and correlations create/update stable alert episodes. The fingerprint is `type + outlet + provider/resource + hourly evidence window`; repeated observations update the active episode instead of producing duplicate alerts. Provider e-money and unusual-activity alerts are routed only to active memberships with an active assignment at the outlet. Shared-cash alerts route at outlet level and expose `providerId: null` plus redacted evidence, so a recipient cannot see competitor provider projections.
 
-Alert text is delivered as stable message keys and parameters, not a hard-coded imperative. Clients should localize the keys in English/Bengali (for example, `alerts.shared_cash_pressure.review` and `alerts.unusual_activity_review.review`) and retain review-only wording. The API does not prescribe refills, transfers, freezes, blocks, or fraud outcomes. `create-case` currently creates an idempotent review coordination record; Step 9 expands it into the complete case/audit lifecycle.
+Alert text is delivered as stable message keys and parameters, not a hard-coded imperative. Clients should localize the keys in English/Bengali (for example, `alerts.shared_cash_pressure.review` and `alerts.unusual_activity_review.review`) and retain review-only wording. The API does not prescribe refills, transfers, freezes, blocks, or fraud outcomes.
+
+## Cases and audit timeline
+
+`POST /alerts/{id}/create-case` now atomically creates the scoped case, alert link, initial case event, and audit event. Cases transition only through `OPEN → ACKNOWLEDGED → INVESTIGATING → ESCALATED → RESOLVED → CLOSED`; `INVESTIGATING → RESOLVED` is also allowed. Reopening a closed case returns it to `OPEN` and clears its prior resolution. Resolution codes are allowlisted and require a summary.
+
+Every case command requires a caller-owned `Idempotency-Key` and the current optimistic `version`. A replay returns its stored response; a stale version gets `CASE_VERSION_CONFLICT`. Case events, notes, and audit events are append-only at the database level. Each mutation records actor, action, provider/outlet scope, old/new state where relevant, wall/simulated time, correlation ID, and safe metadata. Workflow modules never query or update `transactions`, `outlet_cash_balances`, or `provider_balances`.
 
 ## Environment
 

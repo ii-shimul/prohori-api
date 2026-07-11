@@ -414,6 +414,101 @@ model AlertActionIdempotency {
   @@schema("app")
 }
 
+model Case {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outletId          String   @map("outlet_id") @db.Uuid
+  providerId        String?  @map("provider_id") @db.Uuid
+  state             String   @default("OPEN")
+  version           Int      @default(1)
+  ownerUserId       String?  @map("owner_user_id") @db.Uuid
+  resolutionCode    String?  @map("resolution_code")
+  resolutionSummary String?  @map("resolution_summary")
+  createdBy         String   @map("created_by") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  resolvedAt        DateTime? @map("resolved_at") @db.Timestamptz(6)
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz(6)
+
+  @@index([outletId, providerId, state, updatedAt(sort: Desc)])
+  @@map("cases")
+  @@schema("app")
+}
+
+model CaseAlertLink {
+  caseId   String   @map("case_id") @db.Uuid
+  alertId  String   @unique @map("alert_id") @db.Uuid
+  linkedAt DateTime @default(now()) @map("linked_at") @db.Timestamptz(6)
+  linkedBy String   @map("linked_by") @db.Uuid
+
+  @@id([caseId, alertId])
+  @@map("case_alert_links")
+  @@schema("app")
+}
+
+model CaseEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId        String   @map("case_id") @db.Uuid
+  eventType     String   @map("event_type")
+  actorUserId   String?  @map("actor_user_id") @db.Uuid
+  oldState      String?  @map("old_state")
+  newState      String?  @map("new_state")
+  metadata      Json     @default("{}")
+  correlationId String   @map("correlation_id") @db.Uuid
+  wallAt        DateTime @map("wall_at") @db.Timestamptz(6)
+  simulatedAt   DateTime? @map("simulated_at") @db.Timestamptz(6)
+
+  @@index([caseId, wallAt])
+  @@map("case_events")
+  @@schema("app")
+}
+
+model CaseNote {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId       String   @map("case_id") @db.Uuid
+  authorUserId String   @map("author_user_id") @db.Uuid
+  body         String
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([caseId, createdAt])
+  @@map("case_notes")
+  @@schema("app")
+}
+
+model AuditEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  actorType    String   @map("actor_type")
+  action       String
+  targetType   String   @map("target_type")
+  targetId     String   @map("target_id") @db.Uuid
+  providerId   String?  @map("provider_id") @db.Uuid
+  outletId     String?  @map("outlet_id") @db.Uuid
+  oldState     String?  @map("old_state")
+  newState     String?  @map("new_state")
+  safeMetadata Json     @default("{}") @map("safe_metadata")
+  wallAt       DateTime @map("wall_at") @db.Timestamptz(6)
+  simulatedAt  DateTime? @map("simulated_at") @db.Timestamptz(6)
+  correlationId String  @map("correlation_id") @db.Uuid
+
+  @@index([targetType, targetId, wallAt])
+  @@map("audit_events")
+  @@schema("app")
+}
+
+model CaseCommandIdempotency {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId    String   @map("actor_user_id") @db.Uuid
+  action         String
+  idempotencyKey String   @map("idempotency_key")
+  caseId         String   @map("case_id") @db.Uuid
+  response       Json
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([actorUserId, action, idempotencyKey])
+  @@map("case_command_idempotency")
+  @@schema("app")
+}
+
 model Transaction {
   id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId      String               @map("provider_id") @db.Uuid

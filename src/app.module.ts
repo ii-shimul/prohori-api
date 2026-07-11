@@ -3,6 +3,7 @@ import { AlertsModule } from './alerts/alerts.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from './config/config.module';
+import { CasesModule } from './cases/cases.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { IngestionModule } from './ingestion/ingestion.module';
@@ -16,6 +17,7 @@ import { ScopeModule } from './scope/scope.module';
     DatabaseModule,
     AnalyticsModule,
     AlertsModule,
+    CasesModule,
     HealthModule,
     LiquidityModule,
     IngestionModule,

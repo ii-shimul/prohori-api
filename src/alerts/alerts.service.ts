@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { CasesService } from '../cases/cases.service';
 
 type ScopedTransaction = Prisma.TransactionClient;
 type Quality = 'healthy' | 'degraded' | 'unreliable';
@@ -34,7 +35,10 @@ export interface AlertForecastInput {
 
 @Injectable()
 export class AlertsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cases: CasesService,
+  ) {}
 
   /** Creates/updates active review episodes from persisted analytical evidence. */
   async syncForecastAlerts(tx: ScopedTransaction, input: AlertForecastInput) {
@@ -225,25 +229,13 @@ export class AlertsService {
     });
   }
 
-  async createCase(user: AuthenticatedUser, id: string, key: string) {
-    return this.action(user, id, 'create_case', key, async (tx) => {
-      const request = await tx.alertCaseRequest.upsert({
-        where: { alertId: id },
-        create: { alertId: id, requestedBy: user.id },
-        update: {},
-      });
-      const alert = await tx.alert.update({
-        where: { id },
-        data: { status: 'case_created' },
-      });
-      return {
-        alert: serializeAlert(alert),
-        caseRequest: {
-          id: request.id,
-          createdAt: request.createdAt.toISOString(),
-        },
-      };
-    });
+  async createCase(
+    user: AuthenticatedUser,
+    id: string,
+    key: string,
+    correlationId: string,
+  ) {
+    return this.cases.createFromAlert(user, id, key, correlationId);
   }
 
   private async action<T>(

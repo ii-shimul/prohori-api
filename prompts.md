@@ -70,3 +70,13 @@ add alert evidence, safe next step, localization key, owner/recipient and stable
 build alert list/detail, acknowledge, assign and create-case APIs with idempotency
 no transfer/refill/funds action wording or behavior
 test routing, redaction, duplicate alert and unauthorized requests before finish
+
+Commit 9:
+
+move to the next step
+build full case workflow from alert to closed case
+add assign, acknowledge, note, verification, escalate, review, resolve, close and reopen
+keep every action versioned and idempotent, write case event and audit event together
+make timeline append-only and provider scoped
+never let case or alert action touch transaction or balance data
+test lifecycle, invalid transition, cross-provider access, duplicate command and audit trail before finish

@@ -14,7 +14,7 @@ describe('AlertsService', () => {
       (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
     ),
   } as unknown as PrismaService;
-  const service = new AlertsService(prisma);
+  const service = new AlertsService(prisma, {} as never);
   const generatedAt = new Date('2026-01-01T12:00:00.000Z');
 
   beforeEach(() => {

@@ -87,8 +87,14 @@ export class AlertsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Headers('idempotency-key') key: string | undefined,
+    @Headers('x-correlation-id') correlationId: string | undefined,
   ) {
-    return this.alerts.createCase(user, parseId(id), parseKey(key));
+    return this.alerts.createCase(
+      user,
+      parseId(id),
+      parseKey(key),
+      parseCorrelation(correlationId),
+    );
   }
 }
 
@@ -102,6 +108,14 @@ function parseKey(value: string | undefined): string {
     throw invalid(
       'MISSING_IDEMPOTENCY_KEY',
       'Idempotency-Key is required and must be at most 200 characters.',
+    );
+  return value;
+}
+function parseCorrelation(value: string | undefined): string {
+  if (!value || !idSchema.safeParse(value).success)
+    throw invalid(
+      'INVALID_CORRELATION_ID',
+      'A valid correlation ID is required.',
     );
   return value;
 }
