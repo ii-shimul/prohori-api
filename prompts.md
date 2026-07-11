@@ -52,3 +52,12 @@ if data is stale or conflicting, show degraded/unreliable and hide exact eta
 add scoped outlet health, balance, forecast and transaction APIs
 make sure provider balances never become one combined usable balance
 test normal, surge, low balance, stale and conflict cases before finish
+
+Commit 7:
+
+build unusual activity checks for repeated amounts and abnormal transaction velocity
+show clear evidence, baseline, threshold, score, time window and possible normal reason
+keep it review only, never call anything fraud
+correlate it with liquidity pressure only when both rules match, dont say correlation means cause
+add Scenario B tests and scoped anomaly/data-quality APIs
+test normal and bad cases before finish

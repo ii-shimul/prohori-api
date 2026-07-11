@@ -4,8 +4,10 @@ import { AnalyticsService, deriveDataQuality } from './analytics.service';
 describe('AnalyticsService', () => {
   const tx = {
     $executeRaw: jest.fn(),
+    anomalySignal: { createMany: jest.fn(), findMany: jest.fn() },
     dataQualityIncident: { findMany: jest.fn() },
     forecastPoint: { createMany: jest.fn() },
+    liquidityAnomalyCorrelation: { createMany: jest.fn() },
     forecastRun: { create: jest.fn() },
     outlet: { findUnique: jest.fn() },
     outletCashBalance: { findUniqueOrThrow: jest.fn() },
@@ -61,6 +63,31 @@ describe('AnalyticsService', () => {
     expect(forecast.resources).toHaveLength(2);
     expect(tx.forecastRun.create).toHaveBeenCalledTimes(1);
     expect(tx.forecastPoint.createMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists separate Scenario B anomaly evidence and correlation with shared-cash pressure', async () => {
+    tx.transaction.findMany.mockResolvedValue(
+      Array.from({ length: 4 }, (_, index) => ({
+        amountMinor: 30_000n,
+        id: `scenario-b-${index}`,
+        lifecycle: 'SETTLED',
+        occurredAt: new Date(`2026-01-01T11:5${index}:00.000Z`),
+        providerId: '10000000-0000-4000-8000-000000000001',
+        type: 'CASH_OUT',
+      })),
+    );
+    tx.anomalySignal.findMany.mockResolvedValue([
+      { id: 'signal-id', score: 1 },
+    ]);
+
+    await service.getForecasts(user, outletId);
+
+    expect(tx.anomalySignal.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
+    expect(tx.liquidityAnomalyCorrelation.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
   });
 
   it('maps stale feed data to degraded and conflicting feed data to unreliable', () => {

@@ -41,6 +41,22 @@ export class OutletAnalyticsController {
     return this.analytics.getForecasts(user, parseOutletId(id));
   }
 
+  @Get(':id/anomalies')
+  getAnomalies(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.analytics.getAnomalies(user, parseOutletId(id));
+  }
+
+  @Get(':id/data-quality')
+  getDataQuality(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.analytics.getDataQuality(user, parseOutletId(id));
+  }
+
   @Get(':id/transactions')
   getTransactions(
     @CurrentUser() user: AuthenticatedUser,

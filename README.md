@@ -40,7 +40,7 @@ npm run db:reset
 
 `db:reset` applies `supabase/migrations/` then deterministic synthetic `supabase/seed.sql`. The private `app` schema is excluded from Supabase Data API exposure; direct `anon` and `authenticated` domain access is revoked.
 
-Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, deterministic simulation state/baselines, and persisted forecast runs/point snapshots. Steps 1–6 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
+Current schema: providers, areas, outlets, profiles, memberships, assignments, shared-cash balances, provider e-money balances, feed batches, transactions, snapshots, data-quality incidents, deterministic simulation state/baselines, persisted forecast runs/point snapshots, anomaly signals, and liquidity/anomaly correlations. Steps 1–7 are complete. `SUPABASE_URL` is distinct from Prisma's `DATABASE_URL`.
 
 ## Commands
 
@@ -91,6 +91,8 @@ Current routes:
 - `GET /outlets/{id}/balances` — separate shared cash and authorized provider e-money positions.
 - `GET /outlets/{id}/forecasts` — persisted 30/60/120/240-minute bounded projections.
 - `GET /outlets/{id}/transactions?limit=50&cursor={uuid}` — scoped provider ledger events.
+- `GET /outlets/{id}/anomalies` — persisted repeated-amount and velocity review signals with source references, baseline, threshold, score, quality/confidence, benign-context explanation, and any non-causal liquidity correlation.
+- `GET /outlets/{id}/data-quality` — scoped active quality incidents behind analytics outputs.
 - `POST /simulation/reset`, `POST /simulation/start`, `POST /simulation/step` (DEMO_ADMIN only)
 
 Catalog routes exist in contract but return `503 AUTH_NOT_CONFIGURED` until Step 3 adds verified Supabase JWT authentication and scope enforcement. They are never temporarily public.
@@ -111,6 +113,12 @@ curl -H "Authorization: Bearer <access-token>" \
 ```
 
 For a normal feed, points include ETAs. After scenario C creates delayed/conflicting feed evidence, the same route returns `dataQuality: "unreliable"` and exact ETA fields are `null`; it does not make a replenishment or transfer recommendation. See [`openapi.yaml`](./openapi.yaml) for both complete response examples.
+
+## Unusual-activity review signals
+
+`GET /outlets/{id}/anomalies` creates deterministic, persisted signals from settled outlet/provider transactions in a 60-minute evidence window and a preceding seeded-history baseline. Repeated/near-identical amount clusters trigger at three events above baseline; velocity triggers at four events or three times the six-bucket baseline. Each signal includes the detector version, observed and baseline values, threshold, normalized score, source transaction IDs, evidence window, possible benign explanation, analytical confidence, and propagated data quality.
+
+Scenario B submits four same-amount `CASH_OUT` events through the normal ingestion path. This produces separate shared-cash liquidity pressure and unusual-activity signals. A correlation is persisted only when both meet the fixed `0.75` threshold; its context explicitly states that coincidence in the evidence window does not establish causation. All responses say **“Unusual activity requires review.”** They never label activity as fraud or make a verdict.
 
 ## Environment
 

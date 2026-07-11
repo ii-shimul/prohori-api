@@ -63,6 +63,8 @@ describe('Health endpoint (e2e)', () => {
     '/api/v1/outlets/30000000-0000-4000-8000-000000000001/health',
     '/api/v1/outlets/30000000-0000-4000-8000-000000000001/balances',
     '/api/v1/outlets/30000000-0000-4000-8000-000000000001/forecasts',
+    '/api/v1/outlets/30000000-0000-4000-8000-000000000001/anomalies',
+    '/api/v1/outlets/30000000-0000-4000-8000-000000000001/data-quality',
     '/api/v1/outlets/30000000-0000-4000-8000-000000000001/transactions',
   ])('rejects unauthenticated outlet analytics route %s', async (url) => {
     const response = await app.inject({ method: 'GET', url });

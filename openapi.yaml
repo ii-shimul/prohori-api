@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Prohori API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Synthetic decision-support API for provider liquidity, unusual activity review,
     data quality, and case coordination. It never performs financial actions.
@@ -216,6 +216,53 @@ paths:
                     modelConfidence: 0.625
                     limitingResource: { resource: provider_efloat, providerId: 10000000-0000-4000-8000-000000000001 }
                     resources: [{ resource: provider_efloat, providerId: 10000000-0000-4000-8000-000000000001, currentMinor: '300000', demandRateMinorPerMinute: 833.33, points: [{ horizonMinutes: 30, projectedLowMinor: '270000', projectedMidMinor: '275000', projectedHighMinor: '280000', reserveEtaMinutes: null, likelyDepletionEtaMinutes: null, riskBand: moderate }] }]
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /outlets/{id}/anomalies:
+    get:
+      operationId: listOutletAnomalies
+      summary: Generate and list deterministic unusual-activity review signals
+      description: Signals compare an outlet/provider evidence window with stored baseline activity. The response uses review-only language and never asserts fraud or causation. It may include a persisted correlation to separately retained shared-cash liquidity pressure.
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OutletId' }]
+      responses:
+        '200':
+          description: Authorized unusual-activity review signals
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AnomalySignal' }
+              example:
+                - id: 80000000-0000-4000-8000-000000000001
+                  message: Unusual activity requires review.
+                  detectorType: repeated_amount
+                  detectorVersion: 1.0.0
+                  observedValue: 4
+                  baselineValue: 0
+                  threshold: 3
+                  score: 1
+                  provider: { id: 10000000-0000-4000-8000-000000000002, code: PROVIDER_B, name: Provider B, status: ACTIVE }
+                  sourceTransactionIds: [90000000-0000-4000-8000-000000000001]
+                  evidenceWindow: { start: '2026-01-01T07:00:00.000Z', end: '2026-01-01T08:00:00.000Z' }
+                  possibleBenignExplanation: A scheduled campaign or common denomination may produce repeated amounts; review the event context.
+                  modelConfidence: 0.5
+                  dataQuality: healthy
+                  correlation: { score: 1, threshold: 0.75, context: Shared-cash liquidity pressure and unusual activity overlap in the same deterministic evidence window. This correlation does not establish causation. }
+        '401': { $ref: '#/components/responses/StandardError' }
+        '404': { $ref: '#/components/responses/StandardError' }
+  /outlets/{id}/data-quality:
+    get:
+      operationId: getOutletDataQuality
+      summary: List scoped active data-quality evidence for an outlet
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OutletId' }]
+      responses:
+        '200':
+          description: Derived quality and underlying active incidents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutletDataQuality' }
         '401': { $ref: '#/components/responses/StandardError' }
         '404': { $ref: '#/components/responses/StandardError' }
   /outlets/{id}/transactions:
@@ -459,6 +506,9 @@ components:
         dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
         modelConfidence: { type: number, minimum: 0, maximum: 1 }
         limitingResource: { $ref: '#/components/schemas/LimitingResource' }
+        unusualActivity:
+          type: array
+          items: { $ref: '#/components/schemas/AnomalySignal' }
     OutletBalances:
       type: object
       required: [outletId, sharedCash, providerEMoney]
@@ -517,6 +567,52 @@ components:
         modelConfidence: { type: number, minimum: 0, maximum: 1 }
         limitingResource: { $ref: '#/components/schemas/LimitingResource' }
         resources: { type: array, items: { $ref: '#/components/schemas/ForecastResource' } }
+    AnomalySignal:
+      type: object
+      required: [id, message, detectorType, detectorVersion, observedValue, baselineValue, threshold, score, sourceTransactionIds, evidenceWindow, possibleBenignExplanation, modelConfidence, dataQuality, provider, correlation]
+      properties:
+        id: { type: string, format: uuid }
+        message: { type: string, const: Unusual activity requires review. }
+        detectorType: { type: string, enum: [repeated_amount, abnormal_velocity] }
+        detectorVersion: { type: string }
+        observedValue: { type: number }
+        baselineValue: { type: number }
+        threshold: { type: number }
+        score: { type: number, minimum: 0, maximum: 1 }
+        sourceTransactionIds: { type: array, items: { type: string, format: uuid } }
+        evidenceWindow:
+          type: object
+          required: [start, end]
+          properties:
+            start: { type: string, format: date-time }
+            end: { type: string, format: date-time }
+        possibleBenignExplanation: { type: string }
+        modelConfidence: { type: number, minimum: 0, maximum: 1 }
+        dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
+        provider: { $ref: '#/components/schemas/Provider' }
+        correlation:
+          type: [object, 'null']
+          properties:
+            score: { type: number, minimum: 0, maximum: 1 }
+            threshold: { type: number, minimum: 0, maximum: 1 }
+            context: { type: string }
+    OutletDataQuality:
+      type: object
+      required: [outletId, dataQuality, incidents]
+      properties:
+        outletId: { type: string, format: uuid }
+        dataQuality: { type: string, enum: [healthy, degraded, unreliable] }
+        incidents:
+          type: array
+          items:
+            type: object
+            required: [id, category, details, detectedAt, providerId]
+            properties:
+              id: { type: string, format: uuid }
+              category: { type: string }
+              details: { type: object }
+              detectedAt: { type: string, format: date-time }
+              providerId: { type: [string, 'null'], format: uuid }
     TransactionPage:
       type: object
       required: [items, nextCursor]

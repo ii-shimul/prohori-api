@@ -23,6 +23,8 @@ export class SimulationService {
   async reset(user: AuthenticatedUser) {
     await this.assertDemoAdmin(user);
     await this.prisma.$transaction(async (tx) => {
+      await tx.liquidityAnomalyCorrelation.deleteMany();
+      await tx.anomalySignal.deleteMany();
       await tx.dataQualityIncident.deleteMany();
       await tx.balanceSnapshot.deleteMany();
       await tx.transaction.deleteMany();
@@ -106,19 +108,20 @@ function makeFixture(
   const amountMinor =
     scenario === 'A' ? 50000 : scenario === 'B' ? 30000 : 10000;
   const raw = {
-    events: [
-      {
-        amountMinor,
-        eventId: `scenario-${scenario}-${step}`,
-        eventVersion: 1,
-        idempotencyKey: `scenario-${scenario}-${step}`,
-        lifecycle: 'SETTLED',
-        occurredAt,
-        outletCode: 'DN-001',
-        receivedAt,
-        type: scenario === 'B' ? 'CASH_OUT' : 'CASH_IN',
-      },
-    ],
+    events: Array.from({ length: scenario === 'B' ? 4 : 1 }, (_, index) => ({
+      amountMinor,
+      eventId: `scenario-${scenario}-${step}-${index}`,
+      eventVersion: 1,
+      idempotencyKey: `scenario-${scenario}-${step}-${index}`,
+      lifecycle: 'SETTLED',
+      occurredAt:
+        scenario === 'B'
+          ? `2026-01-01T08:${minute}:${String(index).padStart(2, '0')}.000Z`
+          : occurredAt,
+      outletCode: 'DN-001',
+      receivedAt,
+      type: scenario === 'B' ? 'CASH_OUT' : 'CASH_IN',
+    })),
     receivedAt,
     sequence: step + 1,
     snapshots:

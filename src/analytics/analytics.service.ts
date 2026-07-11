@@ -7,6 +7,10 @@ import {
   LiquidityForecast,
   forecastLiquidity,
 } from './liquidity-forecast';
+import {
+  ANOMALY_DETECTOR_VERSION,
+  detectUnusualActivity,
+} from './anomaly-detector';
 
 export interface TransactionPage {
   items: Array<{
@@ -62,11 +66,40 @@ export class AnalyticsService {
       modelConfidence: run.modelConfidence,
       outletId,
       forecastRunId: run.id,
+      unusualActivity: await this.listAnomaliesInScope(user, outletId),
     };
   }
 
   async getForecasts(user: AuthenticatedUser, outletId: string) {
     return this.createForecast(user, outletId);
+  }
+
+  async getAnomalies(user: AuthenticatedUser, outletId: string) {
+    await this.createForecast(user, outletId);
+    return this.listAnomaliesInScope(user, outletId);
+  }
+
+  async getDataQuality(user: AuthenticatedUser, outletId: string) {
+    return this.withScope(user, async (tx) => {
+      await this.assertOutlet(tx, outletId);
+      const incidents = await tx.dataQualityIncident.findMany({
+        where: { outletId, resolvedAt: null },
+        orderBy: { detectedAt: 'desc' },
+      });
+      return {
+        dataQuality: deriveDataQuality(
+          incidents.map((incident) => incident.category),
+        ),
+        incidents: incidents.map((incident) => ({
+          category: incident.category,
+          detectedAt: incident.detectedAt.toISOString(),
+          details: incident.details,
+          id: incident.id,
+          providerId: incident.providerId,
+        })),
+        outletId,
+      };
+    });
   }
 
   async getTransactions(
@@ -119,6 +152,7 @@ export class AnalyticsService {
               amountMinor: true,
               occurredAt: true,
               providerId: true,
+              id: true,
               lifecycle: true,
               type: true,
             },
@@ -196,8 +230,149 @@ export class AnalyticsService {
           })),
         ),
       });
+      await this.persistAnomalySignals(tx, {
+        dataQuality,
+        forecast,
+        forecastRunId: run.id,
+        generatedAt,
+        outletId,
+        transactions,
+      });
       return { ...response, id: run.id };
     });
+  }
+
+  private async listAnomaliesInScope(
+    user: AuthenticatedUser,
+    outletId: string,
+  ) {
+    return this.withScope(user, async (tx) => {
+      await this.assertOutlet(tx, outletId);
+      const signals = await tx.anomalySignal.findMany({
+        where: { outletId },
+        include: {
+          correlation: true,
+          provider: { select: { code: true, id: true, name: true } },
+        },
+        orderBy: [{ evidenceWindowEnd: 'desc' }, { detectorType: 'asc' }],
+      });
+      return signals.map((signal) => ({
+        baselineValue: Number(signal.baselineValue),
+        correlation: signal.correlation
+          ? {
+              context: signal.correlation.context,
+              score: Number(signal.correlation.correlationScore),
+              threshold: Number(signal.correlation.correlationThreshold),
+            }
+          : null,
+        dataQuality: signal.dataQuality,
+        detectorType: signal.detectorType,
+        detectorVersion: signal.detectorVersion,
+        evidenceWindow: {
+          end: signal.evidenceWindowEnd.toISOString(),
+          start: signal.evidenceWindowStart.toISOString(),
+        },
+        id: signal.id,
+        message: 'Unusual activity requires review.',
+        modelConfidence: Number(signal.modelConfidence),
+        observedValue: Number(signal.observedValue),
+        possibleBenignExplanation: signal.possibleBenignExplanation,
+        provider: signal.provider,
+        score: Number(signal.score),
+        sourceTransactionIds: signal.sourceTransactionIds,
+        threshold: Number(signal.threshold),
+      }));
+    });
+  }
+
+  private async persistAnomalySignals(
+    tx: ScopedTransaction,
+    input: {
+      dataQuality: DataQuality;
+      forecast: LiquidityForecast;
+      forecastRunId: string;
+      generatedAt: Date;
+      outletId: string;
+      transactions: Array<{
+        amountMinor: bigint;
+        id: string;
+        lifecycle: string;
+        occurredAt: Date;
+        providerId: string;
+        type: 'CASH_IN' | 'CASH_OUT';
+      }>;
+    },
+  ) {
+    const providerIds = [
+      ...new Set(
+        input.transactions.map((transaction) => transaction.providerId),
+      ),
+    ];
+    const candidates = providerIds.flatMap((providerId) =>
+      detectUnusualActivity({
+        dataQuality: input.dataQuality,
+        generatedAt: input.generatedAt,
+        history: input.transactions,
+        modelConfidence: input.forecast.modelConfidence,
+        providerId,
+      }).map((candidate) => ({ ...candidate, providerId })),
+    );
+    if (!candidates.length) return;
+
+    await tx.anomalySignal.createMany({
+      data: candidates.map((candidate) => ({
+        baselineValue: candidate.baselineValue,
+        dataQuality: candidate.dataQuality,
+        detectorType: candidate.detectorType,
+        detectorVersion: ANOMALY_DETECTOR_VERSION,
+        evidenceWindowEnd: candidate.evidenceWindowEnd,
+        evidenceWindowStart: candidate.evidenceWindowStart,
+        modelConfidence: candidate.modelConfidence,
+        observedValue: candidate.observedValue,
+        outletId: input.outletId,
+        possibleBenignExplanation: candidate.possibleBenignExplanation,
+        providerId: candidate.providerId,
+        score: candidate.score,
+        sourceTransactionIds: candidate.sourceTransactionIds,
+        threshold: candidate.threshold,
+      })),
+      skipDuplicates: true,
+    });
+
+    const sharedCashRisk =
+      input.forecast.resources
+        .find((resource) => resource.resource === 'shared_cash')
+        ?.points.reduce(
+          (highest, point) => Math.max(highest, riskValue(point.riskBand)),
+          0,
+        ) ?? 0;
+    if (sharedCashRisk < 0.85) return;
+    const signals = await tx.anomalySignal.findMany({
+      where: {
+        detectorVersion: ANOMALY_DETECTOR_VERSION,
+        evidenceWindowEnd: input.generatedAt,
+        outletId: input.outletId,
+      },
+      select: { id: true, score: true },
+    });
+    for (const signal of signals) {
+      const correlationScore = Math.min(sharedCashRisk, Number(signal.score));
+      if (correlationScore >= 0.75) {
+        await tx.liquidityAnomalyCorrelation.createMany({
+          data: [
+            {
+              anomalySignalId: signal.id,
+              context:
+                'Shared-cash liquidity pressure and unusual activity overlap in the same deterministic evidence window. This correlation does not establish causation.',
+              correlationScore,
+              correlationThreshold: 0.75,
+              forecastRunId: input.forecastRunId,
+            },
+          ],
+          skipDuplicates: true,
+        });
+      }
+    }
   }
 
   private async assertOutlet(
@@ -274,6 +449,10 @@ function serializeForecast(
       })),
     })),
   };
+}
+
+function riskValue(risk: string): number {
+  return { critical: 1, high: 0.85, low: 0, moderate: 0.5 }[risk] ?? 0;
 }
 
 function resourceLabel(resource: string, providerId?: string): string {

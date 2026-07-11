@@ -55,6 +55,7 @@ model Provider {
   assignments OutletAssignment[]
   providerBalances ProviderBalance[]
   transactions Transaction[]
+  anomalySignals AnomalySignal[]
 
   @@map("providers")
   @@schema("app")
@@ -91,6 +92,7 @@ model Outlet {
   providerBalances ProviderBalance[]
   transactions Transaction[]
   forecastRuns ForecastRun[]
+  anomalySignals AnomalySignal[]
 
   @@map("outlets")
   @@schema("app")
@@ -200,6 +202,7 @@ model ForecastRun {
   evidence        Json
   output          Json
   points          ForecastPoint[]
+  anomalyCorrelations LiquidityAnomalyCorrelation[]
 
   @@index([outletId, generatedAt(sort: Desc)])
   @@map("forecast_runs")
@@ -222,6 +225,49 @@ model ForecastPoint {
 
   @@index([forecastRunId, resource, providerId])
   @@map("forecast_points")
+  @@schema("app")
+}
+
+model AnomalySignal {
+  id                        String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  outletId                  String                       @map("outlet_id") @db.Uuid
+  outlet                    Outlet                       @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  providerId                String                       @map("provider_id") @db.Uuid
+  provider                  Provider                     @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  detectorType              String                       @map("detector_type")
+  detectorVersion           String                       @map("detector_version")
+  threshold                 Decimal
+  observedValue             Decimal                      @map("observed_value")
+  baselineValue             Decimal                      @map("baseline_value")
+  score                     Decimal                      @db.Decimal(5, 4)
+  sourceTransactionIds      Json                         @map("source_transaction_ids")
+  evidenceWindowStart       DateTime                     @map("evidence_window_start") @db.Timestamptz(6)
+  evidenceWindowEnd         DateTime                     @map("evidence_window_end") @db.Timestamptz(6)
+  possibleBenignExplanation String                       @map("possible_benign_explanation")
+  modelConfidence           Decimal                      @map("model_confidence") @db.Decimal(5, 4)
+  dataQuality               String                       @map("data_quality")
+  createdAt                 DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  correlation               LiquidityAnomalyCorrelation?
+
+  @@unique([outletId, providerId, detectorType, detectorVersion, evidenceWindowEnd])
+  @@index([outletId, providerId, evidenceWindowEnd(sort: Desc)])
+  @@map("anomaly_signals")
+  @@schema("app")
+}
+
+model LiquidityAnomalyCorrelation {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  anomalySignalId      String        @unique @map("anomaly_signal_id") @db.Uuid
+  anomalySignal        AnomalySignal @relation(fields: [anomalySignalId], references: [id], onDelete: Cascade)
+  forecastRunId        String        @map("forecast_run_id") @db.Uuid
+  forecastRun          ForecastRun   @relation(fields: [forecastRunId], references: [id], onDelete: Cascade)
+  correlationThreshold Decimal       @map("correlation_threshold") @db.Decimal(5, 4)
+  correlationScore     Decimal       @map("correlation_score") @db.Decimal(5, 4)
+  context              String
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([forecastRunId])
+  @@map("liquidity_anomaly_correlations")
   @@schema("app")
 }
 

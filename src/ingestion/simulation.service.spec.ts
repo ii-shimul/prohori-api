@@ -6,7 +6,9 @@ import { SimulationService } from './simulation.service';
 
 describe('SimulationService', () => {
   const tx = {
+    anomalySignal: { deleteMany: jest.fn() },
     balanceSnapshot: { deleteMany: jest.fn() },
+    liquidityAnomalyCorrelation: { deleteMany: jest.fn() },
     dataQualityIncident: { deleteMany: jest.fn() },
     feedBatch: { deleteMany: jest.fn() },
     outletCashBalance: { update: jest.fn() },
